@@ -1,15 +1,10 @@
 import torch
 from torch.utils.data import DataLoader, random_split
-import yaml
+from utils import load_config
 from models import ResNetModel, EfficientNetModel
 from dataset import WikiArtDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-def load_config(config_path='config.yaml'):
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    return config
 
 def train(model_settings, train_settings):
     # Dataset
