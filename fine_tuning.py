@@ -1,8 +1,11 @@
 import torch
+import os
 from torch.utils.data import DataLoader, random_split
 from utils import load_config
 from models import ResNetModel, EfficientNetModel
 from dataset import WikiArtDataset
+
+#os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128" # Proxy to train with hyperion
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -95,6 +98,10 @@ def main():
 
     model_setting = config['model']
     train_setting = config['fine_tuning']
+
+    print("\n############## MODEL SETTINGS ##############")
+    print(model_setting)
+    print()
     
     train(model_setting, train_setting)
     validate(model_setting, train_setting)

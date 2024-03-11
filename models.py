@@ -1,3 +1,5 @@
+# REF. SWIN-TRANSFORMER: https://python.plainenglish.io/swin-transformer-from-scratch-in-pytorch-31275152bf03
+
 import torch
 import torch.nn as nn
 from torchvision import models
