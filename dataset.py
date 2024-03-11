@@ -96,7 +96,7 @@ class WikiArtDataset(data.Dataset):
 
 if __name__ == "__main__":
 
-    dataset = WikiArtDataset(mode="train", load_data=True)  # Add your image transformations if needed
+    dataset = WikiArtDataset(load_data=True)  # Add your image transformations if needed
     train_len = int(len(dataset) * 0.8)
     train_set, test_set = random_split(dataset, [train_len, len(dataset) - train_len])
     train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=2, shuffle=False)
