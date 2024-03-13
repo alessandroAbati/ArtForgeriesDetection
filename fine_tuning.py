@@ -14,9 +14,9 @@ from dataset_v2 import WikiArtDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train(model_settings, train_settings, logger):
+def train(data_settings, model_settings, train_settings, logger):
     # Dataset
-    dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batch1_00000-00011'))  # Add parameters as needed
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'])  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, _ = random_split(dataset, [train_size, len(dataset) - train_size])
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
@@ -64,9 +64,9 @@ def train_loop(model, train_loader, criterion, optimizer, model_settings, train_
             torch.save(model.state_dict(), f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_ckt_{epoch+1}.pth")
             min_loss = avg_loss
 
-def validate(model_settings, train_settings, logger):
+def validate(data_settings, model_settings, train_settings, logger):
     # Dataset
-    dataset = WikiArtDataset(load_data=True)
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'])
     _, val_dataset = random_split(dataset, [int(0.8 * len(dataset)), len(dataset) - int(0.8 * len(dataset))])
     val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)
 
@@ -103,6 +103,7 @@ def validate_loop(model, val_loader, criterion, logger):
 def main():
     config = load_config()
 
+    data_setting = config['data_settings']
     model_setting = config['model']
     train_setting = config['fine_tuning']
 
@@ -115,8 +116,8 @@ def main():
     print(model_setting)
     print()
     
-    train(model_setting, train_setting, logger)
-    validate(model_setting, train_setting, logger)
+    train(data_setting, model_setting, train_setting, logger)
+    validate(data_setting, model_setting, train_setting, logger)
 
 if __name__ == '__main__':
     main()
