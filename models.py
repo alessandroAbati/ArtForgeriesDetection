@@ -1,5 +1,6 @@
 # REF. SWIN-TRANSFORMER: https://python.plainenglish.io/swin-transformer-from-scratch-in-pytorch-31275152bf03
 
+import timm
 import torch
 import torch.nn as nn
 from torchvision import models
@@ -53,3 +54,12 @@ class EfficientNetModel(nn.Module):
     def load_checkpoint(self, checkpoint_path):
         weights = torch.load(checkpoint_path)
         self.model.load_state_dict(weights)
+
+class SwinTransformerModel(nn.Module):
+    def __init__(self, num_classes, pretrained=True, model_name='swin_tiny_patch4_window7_224'):
+        super(SwinTransformerModel, self).__init__()
+        self.swin_transformer = timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
+
+    def forward(self, x):
+        return self.swin_transformer(x)
+

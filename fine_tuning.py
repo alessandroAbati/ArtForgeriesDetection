@@ -3,7 +3,8 @@ import os
 from torch.utils.data import DataLoader, random_split
 from utils import load_config
 from models import ResNetModel, EfficientNetModel
-from dataset import WikiArtDataset
+#from dataset import WikiArtDataset
+from dataset_v2 import WikiArtDataset
 
 #os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128" # Proxy to train with hyperion
 
@@ -11,7 +12,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def train(model_settings, train_settings):
     # Dataset
-    dataset = WikiArtDataset(mode='train', load_data=True)  # Add parameters as needed
+    dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batch1_00000-00011'))  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, _ = random_split(dataset, [train_size, len(dataset) - train_size])
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
@@ -41,7 +42,7 @@ def train_loop(model, train_loader, criterion, optimizer, model_settings, train_
         model.train()
         min_loss = float('inf')
         running_loss = 0.0
-        for images, labels, _ in train_loader:
+        for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(images)
@@ -85,7 +86,7 @@ def validate_loop(model, val_loader, criterion):
     model.eval()
     running_loss = 0.0
     with torch.no_grad():
-        for images, labels, _ in val_loader:
+        for images, labels in val_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             loss = criterion(outputs, labels)

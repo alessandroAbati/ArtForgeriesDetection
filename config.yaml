@@ -2,7 +2,7 @@ data_settings:
     dataset_path: 'dataset'
 model:
     model_type: 'resnet' # resnet or efficentnet
-    num_classes: 20
+    num_classes: 128
     checkpoint_folder: 'checkpoints'
 fine_tuning:
     epochs: 10

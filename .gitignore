@@ -1,5 +1,8 @@
-# Clous computing
+# Cloud computing
 run_job.sh
+
+# Data dir
+wikiart_data_batches/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
