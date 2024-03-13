@@ -3,6 +3,10 @@ import os
 from torch.utils.data import DataLoader, random_split
 from utils import load_config
 from models import ResNetModel, EfficientNetModel
+from dataset import WikiArtDataset
+from logger import Logger
+
+torch.manual_seed(0)
 #from dataset import WikiArtDataset
 from dataset_v2 import WikiArtDataset
 
@@ -10,7 +14,7 @@ from dataset_v2 import WikiArtDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train(model_settings, train_settings):
+def train(model_settings, train_settings, logger):
     # Dataset
     dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batch1_00000-00011'))  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
@@ -35,9 +39,9 @@ def train(model_settings, train_settings):
     # TBD
 
     # Train loop
-    train_loop(model, train_loader, criterion, optimizer, model_settings, train_settings)
+    train_loop(model, train_loader, criterion, optimizer, model_settings, train_settings, logger)
 
-def train_loop(model, train_loader, criterion, optimizer, model_settings, train_settings):
+def train_loop(model, train_loader, criterion, optimizer, model_settings, train_settings, logger):
     for epoch in range(train_settings['epochs']):
         model.train()
         min_loss = float('inf')
@@ -52,6 +56,7 @@ def train_loop(model, train_loader, criterion, optimizer, model_settings, train_
             running_loss += loss.item()
         avg_loss = running_loss / len(train_loader)
         print(f'Training Epoch: {epoch+1}, Loss: {avg_loss:.4f}')
+        logger.log({'train_loss': avg_loss})
 
         # Save checkpoint if improvement
         if avg_loss < min_loss:
@@ -59,7 +64,7 @@ def train_loop(model, train_loader, criterion, optimizer, model_settings, train_
             torch.save(model.state_dict(), f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_ckt_{epoch+1}.pth")
             min_loss = avg_loss
 
-def validate(model_settings, train_settings):
+def validate(model_settings, train_settings, logger):
     # Dataset
     dataset = WikiArtDataset(load_data=True)
     _, val_dataset = random_split(dataset, [int(0.8 * len(dataset)), len(dataset) - int(0.8 * len(dataset))])
@@ -82,7 +87,7 @@ def validate(model_settings, train_settings):
     # Validate loop
     validate_loop(model, val_loader, criterion)
 
-def validate_loop(model, val_loader, criterion):
+def validate_loop(model, val_loader, criterion, logger):
     model.eval()
     running_loss = 0.0
     with torch.no_grad():
@@ -93,6 +98,7 @@ def validate_loop(model, val_loader, criterion):
             running_loss += loss.item()
     avg_loss = running_loss / len(val_loader)
     print(f'Validation Loss: {avg_loss:.4f}')
+    logger.log({'validation_loss': avg_loss})
 
 def main():
     config = load_config()
@@ -100,12 +106,17 @@ def main():
     model_setting = config['model']
     train_setting = config['fine_tuning']
 
+    wandb_logger = Logger(
+        f"ArtForgery_INM705",
+        project='inm705_Coursework')
+    logger = wandb_logger.get_logger()
+
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
     
-    train(model_setting, train_setting)
-    validate(model_setting, train_setting)
+    train(model_setting, train_setting, logger)
+    validate(model_setting, train_setting, logger)
 
 if __name__ == '__main__':
     main()
