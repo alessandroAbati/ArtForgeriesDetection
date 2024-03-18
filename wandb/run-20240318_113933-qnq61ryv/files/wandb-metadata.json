@@ -1,0 +1,53 @@
+{
+    "os": "Windows-10-10.0.19045-SP0",
+    "python": "3.11.5",
+    "heartbeatAt": "2024-03-18T11:39:34.984067",
+    "startedAt": "2024-03-18T11:39:33.782535",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "C:\\Users\\julia\\Documents\\Masters\\Computer_Vision\\ArtForgeriesDetection\\fine_tuning.py",
+    "codePathLocal": "fine_tuning.py",
+    "codePath": "fine_tuning.py",
+    "git": {
+        "remote": "https://github.com/alessandroAbati/ArtForgeriesDetection.git",
+        "commit": "a91ee7fa1df2e332876e75b67c4aab52b2a77317"
+    },
+    "email": "julian.a.jimenez.nimmo@bath.edu",
+    "root": "C:/Users/julia/Documents/Masters/Computer_Vision/ArtForgeriesDetection",
+    "host": "DESKTOP-ER5C5SL",
+    "username": "julia",
+    "executable": "C:\\Users\\julia\\anaconda3\\python.exe",
+    "cpu_count": 8,
+    "cpu_count_logical": 16,
+    "cpu_freq": {
+        "current": 3201.0,
+        "min": 0.0,
+        "max": 3201.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3201.0,
+            "min": 0.0,
+            "max": 3201.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 953.2495651245117,
+            "used": 788.1547012329102
+        }
+    },
+    "gpu": "NVIDIA GeForce RTX 3070 Laptop GPU",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce RTX 3070 Laptop GPU",
+            "memory_total": 8589934592
+        }
+    ],
+    "memory": {
+        "total": 31.855525970458984
+    }
+}

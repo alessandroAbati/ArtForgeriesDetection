@@ -1,9 +1,10 @@
 data_settings:
-    dataset_path: 'wikiart_data_batches/data_batch1_00000-00011'
+    dataset_path: 'wikiart/batch1/'
 model:
     model_type: 'resnet' # resnet or efficentnet
     num_classes: 128
     checkpoint_folder: 'checkpoints'
+    continue_train: False
 fine_tuning:
     epochs: 10
     batch_size: 1

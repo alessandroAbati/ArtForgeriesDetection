@@ -22,16 +22,25 @@ def train(data_settings, model_settings, train_settings, logger):
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
 
     # Model
+
     if model_settings['model_type'] == 'resnet':
         model = ResNetModel(num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes']).to(device)
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
-    
+
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
-
+    epoch = 0
+    if model_settings['continue_train']:
+        ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth", map_location=device)
+        model_weights = ckpt['model_weights']
+        model.load_state_dict(model_weights)
+        optimizer_state = ckpt['optimizer_state']
+        optimizer.load_state_dict(optimizer_state)
+        epoch = ckpt['epoch']
+        print("Model's pretrained weights loaded!")
     # Loss
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -39,12 +48,12 @@ def train(data_settings, model_settings, train_settings, logger):
     # TBD
 
     # Train loop
-    train_loop(model, train_loader, criterion, optimizer, model_settings, train_settings, logger)
+    train_loop(model, train_loader, criterion, optimizer, model_settings, train_settings, logger, epoch)
 
-def train_loop(model, train_loader, criterion, optimizer, model_settings, train_settings, logger):
-    for epoch in range(train_settings['epochs']):
+def train_loop(model, train_loader, criterion, optimizer, model_settings, train_settings, logger, epoch_start):
+    min_loss = float('inf')
+    for epoch in range(epoch_start, train_settings['epochs']):
         model.train()
-        min_loss = float('inf')
         running_loss = 0.0
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
@@ -61,7 +70,8 @@ def train_loop(model, train_loader, criterion, optimizer, model_settings, train_
         # Save checkpoint if improvement
         if avg_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {avg_loss:.4f}). Saving model ...')
-            torch.save(model.state_dict(), f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_ckt_{epoch+1}.pth")
+            ckpt = {'epoch': epoch, 'model_weights': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
+            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth")
             min_loss = avg_loss
 
 def validate(data_settings, model_settings, train_settings, logger):
