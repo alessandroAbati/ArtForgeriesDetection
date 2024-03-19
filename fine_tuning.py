@@ -5,11 +5,14 @@ from utils import load_config
 from models import ResNetModel, EfficientNetModel
 from dataset import WikiArtDataset
 from logger import Logger
+from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
 import wandb
+import numpy as np
 
-torch.manual_seed(0)
 #from dataset import WikiArtDataset
 from dataset_v2 import WikiArtDataset
+
+torch.manual_seed(0)
 
 os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128" # Proxy to train with hyperion
 
@@ -35,14 +38,14 @@ def train(data_settings, model_settings, train_settings, logger):
     optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
 
     # Loading checkpoint
-    epoch = 0
+    epoch_start = 0
     if model_settings['continue_train']:
         ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth", map_location=device)
         model_weights = ckpt['model_weights']
         model.load_state_dict(model_weights)
         optimizer_state = ckpt['optimizer_state']
         optimizer.load_state_dict(optimizer_state)
-        epoch = ckpt['epoch']
+        epoch_start = ckpt['epoch']
         print("Model's pretrained weights loaded!")
 
     # Loss
@@ -50,13 +53,17 @@ def train(data_settings, model_settings, train_settings, logger):
 
     # Training and validation loop
     min_loss = float('inf')
-    for epoch in range(epoch, train_settings['epochs']):
+    for epoch in range(epoch_start, train_settings['epochs']):
         train_loss = train_loop(model, train_loader, criterion, optimizer)
-        val_loss = validate_loop(model, val_loader, criterion)
+        val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion)
+
+        # Calculate metrics
+        acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels,model_settings)
 
         print(f'Epoch: {epoch+1}, Train_Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
         logger.log({'train_loss': train_loss}) 
         logger.log({'validation_loss': val_loss})
+        logger.log({'accuracy': acc, 'precision': prec, 'recall': rec, 'f1_score': f1_score, 'confusion_matrix': conf_matrix})
 
         # Save checkpoint if improvement
         if val_loss < min_loss:
@@ -82,14 +89,36 @@ def train_loop(model, train_loader, criterion, optimizer):
 def validate_loop(model, val_loader, criterion):
     model.eval()
     running_loss = 0.0
+    all_preds = []
+    all_labels = []
     with torch.no_grad():
         for images, labels in val_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             loss = criterion(outputs, labels)
             running_loss += loss.item()
+            preds = torch.argmax(outputs, dim=1)
+            all_preds.append(preds)
+            all_labels.append(labels)
+    all_preds = torch.cat(all_preds, dim=0)
+    all_labels = torch.cat(all_labels, dim=0)
     avg_loss = running_loss / len(val_loader)
-    return avg_loss  
+    return avg_loss, all_preds, all_labels
+
+def calculate_metrics(preds, labels, model_settings):
+    accuracy = Accuracy(task='multiclass').to(device)
+    precision = Precision(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+    recall = Recall(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+    f1 = F1Score(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+    confusion_matrix = ConfusionMatrix(task='multiclass', num_classes=model_settings['num_classes']).to(device)
+
+    acc = accuracy(preds, labels)
+    prec = precision(preds, labels)
+    rec = recall(preds, labels)
+    f1_score = f1(preds, labels)
+    conf_matrix = confusion_matrix(preds, labels)
+
+    return acc, prec, rec, f1_score, conf_matrix
     
 def main():
     config = load_config()
