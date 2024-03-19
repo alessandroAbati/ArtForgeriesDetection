@@ -21,10 +21,10 @@ class ResNetModel(nn.Module):
         # self.model.fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
         self.load_checkpoint('pretrain_weights/resnet_pretrain.pth') # Load checkpoint file
         num_features = self.model.fc.in_features
-        print(num_features)
+        #print(num_features)
         # print(list(self.model.children()))
         self.model.fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
-        print(list(self.model.children()))
+        #print(list(self.model.children()))
 
 
     def forward(self, x):

@@ -10,8 +10,6 @@ from torchvision import transforms
 
 class WikiArtDataset(Dataset):
 
-    # 222 v, 16 c, 4 m, 2 p
-
     artists = ["boris-kustodiev", "camille-pissarro", "childe-hassam", "claude-monet", "edgar-degas", "eugene-boudin", "gustave-dore", "ilya-repin", "ivan-aivazovsky", "ivan-shishkin", "john-singer-sargent", "marc-chagall", "martiros-saryan", "nicholas-roerich", "pablo-picasso", "paul-cezanne", "pierre-auguste-renoir", "pyotr-konchalovsky", "raphael-kirchner", "rembrandt", "salvador-dali", "vincent-van-gogh", "hieronymus-bosch", "leonardo-da-vinci", "albrecht-durer", "edouard-cortes", "sam-francis", "juan-gris", "lucas-cranach-the-elder", "paul-gauguin", "konstantin-makovsky", "egon-schiele", "thomas-eakins", "gustave-moreau", "francisco-goya", "edvard-munch", "henri-matisse", "fra-angelico", "maxime-maufra", "jan-matejko", "mstislav-dobuzhinsky", "alfred-sisley", "mary-cassatt", "gustave-loiseau", "fernando-botero", "zinaida-serebriakova", "georges-seurat", "isaac-levitan", "joaqu\u00e3\u00adn-sorolla", "jacek-malczewski", "berthe-morisot", "andy-warhol", "arkhip-kuindzhi", "niko-pirosmani", "james-tissot", "vasily-polenov", "valentin-serov", "pietro-perugino", "pierre-bonnard", "ferdinand-hodler", "bartolome-esteban-murillo", "giovanni-boldini", "henri-martin", "gustav-klimt", "vasily-perov", "odilon-redon", "tintoretto", "gene-davis", "raphael", "john-henry-twachtman", "henri-de-toulouse-lautrec", "antoine-blanchard", "david-burliuk", "camille-corot", "konstantin-korovin", "ivan-bilibin", "titian", "maurice-prendergast", "edouard-manet", "peter-paul-rubens", "aubrey-beardsley", "paolo-veronese", "joshua-reynolds", "kuzma-petrov-vodkin", "gustave-caillebotte", "lucian-freud", "michelangelo", "dante-gabriel-rossetti", "felix-vallotton", "nikolay-bogdanov-belsky", "georges-braque", "vasily-surikov", "fernand-leger", "konstantin-somov", "katsushika-hokusai", "sir-lawrence-alma-tadema", "vasily-vereshchagin", "ernst-ludwig-kirchner", "mikhail-vrubel", "orest-kiprensky", "william-merritt-chase", "aleksey-savrasov", "hans-memling", "amedeo-modigliani", "ivan-kramskoy", "utagawa-kuniyoshi", "gustave-courbet", "william-turner", "theo-van-rysselberghe", "joseph-wright", "edward-burne-jones", "koloman-moser", "viktor-vasnetsov", "anthony-van-dyck", "raoul-dufy", "frans-hals", "hans-holbein-the-younger", "ilya-mashkov", "henri-fantin-latour", "m.c.-escher", "el-greco", "mikalojus-ciurlionis", "james-mcneill-whistler", "karl-bryullov", "jacob-jordaens", "thomas-gainsborough", "eugene-delacroix", "canaletto"]
     label_to_artist = {i + 1: artist for i, artist in enumerate(artists)}
 
@@ -32,17 +30,17 @@ class WikiArtDataset(Dataset):
             self.transform = transform
 
         # Use glob to find all parquet files in the directory
-        parquet_files = glob.glob(os.path.join(data_dir, 'train-0000*.parquet'))
+        parquet_files = glob.glob(os.path.join(data_dir, 'batch*.parquet'))
 
         # Read each parquet file and concatenate them into a single DataFrame
-        self.data_frame = pd.concat([pd.read_parquet(file, filters=[[('artist',"in",[22,16,4,2])]]) for file in parquet_files], ignore_index=True )
+        self.data_frame = pd.concat([pd.read_parquet(file, filters=[[('artist',"in",[22,16,4,2,13,17,3,18,6,15])]]) for file in parquet_files], ignore_index=True )
 
         # Remove rows with label=0 ('Unknown artist')
         self.data_frame.drop(self.data_frame.index[self.data_frame['artist'] == 0], inplace=True)
         print(self.data_frame.shape)
-        print(self.data_frame.head())
+        #print(self.data_frame.head())
 
-        self.data_frame.to_parquet(f'batch_filter/batch{0}')
+        #self.data_frame.to_parquet(f'wikiart_data_batches/data_batches_filtered/batch{2}.parquet')
 
     def __len__(self):
         return len(self.data_frame)
@@ -71,8 +69,8 @@ class WikiArtDataset(Dataset):
 
 if __name__ == "__main__":
 
-    dataset = WikiArtDataset(data_dir=os.path.join('wikiart', 'batch1'))  # Add your image transformations if needed
-    train_len = int(len(dataset) * 0.8)
+    dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batch2_00012-00023'))  # Add your image transformations if needed
+    """train_len = int(len(dataset) * 0.8)
     train_set, test_set = random_split(dataset, [train_len, len(dataset) - train_len])
     train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=1, shuffle=False)
     test_dataloader = torch.utils.data.DataLoader(test_set, batch_size=1, shuffle=False)
@@ -81,4 +79,4 @@ if __name__ == "__main__":
     for batch in train_dataloader:
         images, label = batch
         print(images)
-        print(label)
+        print(label)"""

@@ -1,5 +1,5 @@
 data_settings:
-    dataset_path: 'wikiart/batch1/'
+    dataset_path: 'wikiart_data_batches/data_batches_filtered'
 model:
     model_type: 'resnet' # resnet or efficentnet
     num_classes: 128
