@@ -7,6 +7,7 @@ import glob
 import os
 from torch.utils.data import random_split
 from torchvision import transforms
+import numpy as np
 
 class WikiArtDataset(Dataset):
 
@@ -37,8 +38,20 @@ class WikiArtDataset(Dataset):
 
         # Remove rows with label=0 ('Unknown artist')
         self.data_frame.drop(self.data_frame.index[self.data_frame['artist'] == 0], inplace=True)
-        print(self.data_frame.shape)
-        #print(self.data_frame.head())
+        
+        # Cast to 0-10 integers label
+        self.data_frame['label'] = np.nan
+        self.data_frame.loc[self.data_frame['artist']==22, 'label'] = 0
+        self.data_frame.loc[self.data_frame['artist']==16, 'label'] = 1
+        self.data_frame.loc[self.data_frame['artist']==4, 'label'] = 2
+        self.data_frame.loc[self.data_frame['artist']==2, 'label'] = 3
+        self.data_frame.loc[self.data_frame['artist']==13, 'label'] = 4
+        self.data_frame.loc[self.data_frame['artist']==17,'label'] = 5
+        self.data_frame.loc[self.data_frame['artist']==3, 'label'] = 6
+        self.data_frame.loc[self.data_frame['artist']==18, 'label'] = 7
+        self.data_frame.loc[self.data_frame['artist']==6, 'label'] = 8
+        self.data_frame.loc[self.data_frame['artist']==15, 'label'] = 9
+
 
         #self.data_frame.to_parquet(f'wikiart_data_batches/data_batches_filtered/batch{2}.parquet')
 
@@ -55,11 +68,8 @@ class WikiArtDataset(Dataset):
         # Convert byte data to Image
         image = Image.open(io.BytesIO(image_bytes))
 
-        # Creating label variable using the column 'artist'
-        label = self.data_frame.iloc[idx]['artist']
-
-        # Adjust label for 0-based indexing
-        label = label - 1
+        # Creating label variable using the column 'label'
+        label = self.data_frame.iloc[idx]['label'].astype(int)
 
         # Apply transformations
         image = self.transform(image)
@@ -69,14 +79,14 @@ class WikiArtDataset(Dataset):
 
 if __name__ == "__main__":
 
-    dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batch2_00012-00023'))  # Add your image transformations if needed
-    """train_len = int(len(dataset) * 0.8)
+    dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batches_filtered'))  # Add your image transformations if needed
+    train_len = int(len(dataset) * 0.8)
     train_set, test_set = random_split(dataset, [train_len, len(dataset) - train_len])
-    train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=1, shuffle=False)
+    train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=1, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_set, batch_size=1, shuffle=False)
 
     print(len(dataset))
     for batch in train_dataloader:
         images, label = batch
-        print(images)
-        print(label)"""
+        #print(images)
+        print(label)

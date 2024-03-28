@@ -7,7 +7,8 @@ from dataset import WikiArtDataset
 from logger import Logger
 from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
 import wandb
-import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 #from dataset import WikiArtDataset
 from dataset_v2 import WikiArtDataset
@@ -28,7 +29,7 @@ def train(data_settings, model_settings, train_settings, logger):
 
     # Model
     if model_settings['model_type'] == 'resnet':
-        model = ResNetModel(num_classes=model_settings['num_classes']).to(device)
+        model = ResNetModel(resnet_version='resnet101',num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes']).to(device)
     else:
@@ -63,8 +64,21 @@ def train(data_settings, model_settings, train_settings, logger):
         print(f'Epoch: {epoch+1}, Train_Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
         logger.log({'train_loss': train_loss}) 
         logger.log({'validation_loss': val_loss})
-        logger.log({'accuracy': acc, 'precision': prec, 'recall': rec, 'f1_score': f1_score, 'confusion_matrix': conf_matrix})
+        logger.log({'accuracy': acc, 'precision': prec, 'recall': rec, 'f1_score': f1_score})
+        #fig = plt.figure()
+        #ax = fig.add_subplot(111)
+        #cax = ax.matshow(conf_matrix.clone().detach().cpu().numpy(), cmap='bone')
+        #fig.colorbar(cax)
 
+        # Save the figure to a wandb artifact
+        #wandb.log({"confusion_matrix": wandb.Image(fig)})
+
+    	# Close the figure to prevent it from being displayed in the notebook
+        #plt.close(fig)
+        f, ax = plt.subplots(figsize = (15,10)) 
+        sns.heatmap(conf_matrix.clone().detach().cpu().numpy(), annot=True, ax=ax)
+        logger.log({"confusion_matrix": wandb.Image(f) })
+        plt.close(f)
         # Save checkpoint if improvement
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
@@ -106,7 +120,7 @@ def validate_loop(model, val_loader, criterion):
     return avg_loss, all_preds, all_labels
 
 def calculate_metrics(preds, labels, model_settings):
-    accuracy = Accuracy(task='multiclass').to(device)
+    accuracy = Accuracy(task='multiclass', num_classes=model_settings['num_classes']).to(device)
     precision = Precision(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
     recall = Recall(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
     f1 = F1Score(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
@@ -128,8 +142,8 @@ def main():
     train_setting = config['fine_tuning']
 
     wandb_logger = Logger(
-        f"ArtForgery_INM705",
-        project='inm705_Coursework')
+        f"finetuning_efficentnetb0_lr=0.0001_",
+        project='ArtForg')
     logger = wandb_logger.get_logger()
 
     print("\n############## MODEL SETTINGS ##############")
