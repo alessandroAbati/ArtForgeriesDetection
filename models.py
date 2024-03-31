@@ -38,7 +38,7 @@ class ResNetModel(nn.Module):
 
     def forward(self, x):
         if self.binary_classification:
-            return torch.sigmoid(self.model(x))
+            return torch.sigmoid(self.model(x))[:,0]
         else:
             return self.model(x)
     
@@ -57,20 +57,31 @@ class EfficientNetModel(nn.Module):
             self.model = EfficientNet.from_name(efficientnet_version) # Load without pretrained weights
 
         num_features = self.model._fc.in_features
-        self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
+        if not binary_classification:
+            self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
+        else:
+            self.model._fc = nn.Linear(num_features, num_classes)#Initially the pretrained art number of classes to load weights
+
 
         if checkpoint_path:
+            print("Loading checkpoint")
             self.load_checkpoint(checkpoint_path) # Load checkpoint file
 
     def forward(self, x):
         if self.binary_classification:
+            # print("Sigmoid")
             return torch.sigmoid(self.model(x))
         else:
             return self.model(x)
-    
+
+    def change_class_layer(self, num_classes):
+        num_features = self.model._fc.in_features
+        self.model._fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
+
     def load_checkpoint(self, checkpoint_path):
-        weights = torch.load(checkpoint_path)
-        self.model.load_state_dict(weights)
+        ckpt = torch.load(f"{checkpoint_path}/efficientnet.pth")
+        self.model.load_state_dict(ckpt['model_weights'])
+        print("Checkpoint retrieved!")
 
 # class SwinTransformerModel(nn.Module):
 #     def __init__(self, num_classes, pretrained=True, model_name='swin_tiny_patch4_window7_224'):

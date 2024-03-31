@@ -13,17 +13,20 @@ import seaborn as sns
 #from dataset import WikiArtDataset
 from dataset_v2 import WikiArtDataset
 
-torch.manual_seed(0)
+torch.manual_seed(42)
 
-os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128" # Proxy to train with hyperion
+# os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128" # Proxy to train with hyperion
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(device)
 
 def train(data_settings, model_settings, train_settings, logger):
     # Dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'])  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
+    print(f"Length Train dataset: {len(train_dataset)}")
+
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)
 
@@ -31,7 +34,8 @@ def train(data_settings, model_settings, train_settings, logger):
     if model_settings['model_type'] == 'resnet':
         model = ResNetModel(resnet_version='resnet101',num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes']).to(device)
+        model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
+        print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
@@ -48,9 +52,21 @@ def train(data_settings, model_settings, train_settings, logger):
         optimizer.load_state_dict(optimizer_state)
         epoch_start = ckpt['epoch']
         print("Model's pretrained weights loaded!")
+    if model_settings['binary']:
+        ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth", map_location=device)
+        model_weights = ckpt['model_weights']
+        for name, param in model.named_parameters():
+            if "fc" not in name:  # Exclude final fully connected layer
+                param.data = model_weights[name]
+        # model.load_state_dict(model_weights)
+        print("Model's pretrained weights loaded!")
 
     # Loss
-    criterion = torch.nn.CrossEntropyLoss()
+    if model_settings['binary']:
+        criterion = torch.nn.BCELoss()
+    else:
+        criterion = torch.nn.CrossEntropyLoss()
+
 
     # Training and validation loop
     min_loss = float('inf')
@@ -93,7 +109,9 @@ def train_loop(model, train_loader, criterion, optimizer):
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
         outputs = model(images)
-        loss = criterion(outputs, labels)
+        labels = labels.type(torch.LongTensor).to(device)
+        # print(f"Predicted: {outputs[:,1]}, Target: {labels}")
+        loss = criterion(outputs[:,1], labels.float())
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
@@ -109,7 +127,8 @@ def validate_loop(model, val_loader, criterion):
         for images, labels in val_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
-            loss = criterion(outputs, labels)
+            labels = labels.type(torch.LongTensor).to(device)
+            loss = criterion(outputs[:, 1], labels.float())
             running_loss += loss.item()
             preds = torch.argmax(outputs, dim=1)
             all_preds.append(preds)
@@ -120,11 +139,11 @@ def validate_loop(model, val_loader, criterion):
     return avg_loss, all_preds, all_labels
 
 def calculate_metrics(preds, labels, model_settings):
-    accuracy = Accuracy(task='multiclass', num_classes=model_settings['num_classes']).to(device)
-    precision = Precision(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-    recall = Recall(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-    f1 = F1Score(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-    confusion_matrix = ConfusionMatrix(task='multiclass', num_classes=model_settings['num_classes']).to(device)
+    accuracy = Accuracy(task='binary', num_classes=model_settings['num_classes']).to(device)
+    precision = Precision(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
+    recall = Recall(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
+    f1 = F1Score(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
+    confusion_matrix = ConfusionMatrix(task='binary', num_classes=model_settings['num_classes']).to(device)
 
     acc = accuracy(preds, labels)
     prec = precision(preds, labels)
@@ -142,7 +161,7 @@ def main():
     train_setting = config['fine_tuning']
 
     wandb_logger = Logger(
-        f"finetuning_efficentnetb0_lr=0.0001_",
+        f"finertuning_efficentnetb0_lr=0.0001_",
         project='ArtForg')
     logger = wandb_logger.get_logger()
 
