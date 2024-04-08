@@ -1,6 +1,7 @@
 import torch
 import os
 from torch.utils.data import DataLoader, random_split
+import torch.nn.functional as F
 from utils import load_config
 from models import ResNetModel, EfficientNetModel
 from dataset import WikiArtDataset
@@ -19,6 +20,17 @@ torch.manual_seed(42)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
+
+def weighted_bce_loss(output, target, weights=None):
+    if weights is not None:
+        assert len(weights) == 2
+
+        loss = weights[1] * (target * torch.log(output)) + \
+               weights[0] * ((1 - target) * torch.log(1 - output))
+    else:
+        loss = target * torch.log(output) + (1 - target) * torch.log(1 - output)
+
+    return torch.neg(torch.mean(loss))
 
 def train(data_settings, model_settings, train_settings, logger):
     # Dataset
@@ -65,7 +77,10 @@ def train(data_settings, model_settings, train_settings, logger):
 
     # Loss
     if model_settings['binary']:
-        criterion = torch.nn.BCELoss()
+        # original_tensor = torch.FloatTensor([0.946, 0.0385])
+        original_tensor = torch.FloatTensor([1.0, 5.0]).to(device)
+        batch_tensor = original_tensor.repeat(8, 1).to(device)
+        criterion = torch.nn.BCELoss(weight=batch_tensor).to(device)
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
@@ -116,7 +131,11 @@ def train_loop(model, train_loader, criterion, optimizer, binary_loss):
         outputs = model(images)
         labels = labels.type(torch.LongTensor).to(device)
         if binary_loss:
-            loss = criterion(outputs[:,1], labels.float())
+            one_hot_labels = F.one_hot(labels, num_classes=2).to(device)
+            original_tensor = torch.FloatTensor([1.0, 5.0]).to(device)
+            batch_tensor = original_tensor.repeat(one_hot_labels.size(0), 1).to(device)
+            loss = weighted_bce_loss(outputs, one_hot_labels.float(), original_tensor)
+            # loss = criterion(outputs, one_hot_labels.float())
         else:
             loss = criterion(outputs, labels)
         loss.backward()
@@ -130,13 +149,19 @@ def validate_loop(model, val_loader, criterion, binary_loss):
     running_loss = 0.0
     all_preds = []
     all_labels = []
+    print("Evaluation")
     with torch.no_grad():
         for images, labels, AI in val_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             labels = labels.type(torch.LongTensor).to(device)
             if binary_loss:
-                loss = criterion(outputs[:, 1], labels.float())
+                one_hot_labels = F.one_hot(labels, num_classes=2).to(device)
+                original_tensor = torch.FloatTensor([1.0, 5.0]).to(device)
+                batch_tensor = original_tensor.repeat(one_hot_labels.size(0), 1).to(device)
+                loss = weighted_bce_loss(outputs, one_hot_labels.float(), original_tensor)
+                # loss = criterion(outputs, one_hot_labels.float())
+
             else:
                 loss = criterion(outputs, labels)
             running_loss += loss.item()

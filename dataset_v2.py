@@ -93,6 +93,13 @@ class WikiArtDataset(Dataset):
 
         print(self.data_frame.tail())
         print(len(self.data_frame))
+        count_forgery = self.data_frame['label'].value_counts().get(1.0, 0)
+        print(count_forgery)
+        count_real = self.data_frame['label'].value_counts().get(0.0, 0)
+        print(count_real)
+        print(f"Proportion of Forgery/AI: {count_forgery/1996}, {count_real/1996}")
+
+
 
         # Creating batches
         # self.data_frame.to_parquet(f'wikiart_data_batches/data_batches_filtered/van{0}.parquet')
@@ -123,7 +130,6 @@ class WikiArtDataset(Dataset):
         image = self.transform(image)
 
         AI = self.data_frame.iloc[idx]['AI']
-
 
         return image, label, AI
 
