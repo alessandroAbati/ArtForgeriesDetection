@@ -22,7 +22,7 @@ print(device)
 
 def train(data_settings, model_settings, train_settings, logger):
     # Dataset
-    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'])  # Add parameters as needed
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
     print(f"Length Train dataset: {len(train_dataset)}")
@@ -44,6 +44,7 @@ def train(data_settings, model_settings, train_settings, logger):
 
     # Loading checkpoint
     epoch_start = 0
+    binary_loss = False
     if model_settings['continue_train']:
         ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth", map_location=device)
         model_weights = ckpt['model_weights']
@@ -60,6 +61,7 @@ def train(data_settings, model_settings, train_settings, logger):
                 param.data = model_weights[name]
         # model.load_state_dict(model_weights)
         print("Model's pretrained weights loaded!")
+        binary_loss = True
 
     # Loss
     if model_settings['binary']:
@@ -71,8 +73,8 @@ def train(data_settings, model_settings, train_settings, logger):
     # Training and validation loop
     min_loss = float('inf')
     for epoch in range(epoch_start, train_settings['epochs']):
-        train_loss = train_loop(model, train_loader, criterion, optimizer)
-        val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion)
+        train_loss = train_loop(model, train_loader, criterion, optimizer, binary_loss)
+        val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss)
 
         # Calculate metrics
         acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels,model_settings)
@@ -99,10 +101,13 @@ def train(data_settings, model_settings, train_settings, logger):
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
             ckpt = {'epoch': epoch, 'model_weights': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
-            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth")
+            if binary_loss:
+                torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth")
+            else:
+                torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth")
             min_loss = val_loss
 
-def train_loop(model, train_loader, criterion, optimizer):
+def train_loop(model, train_loader, criterion, optimizer, binary_loss):
     model.train()
     running_loss = 0.0
     for images, labels in train_loader:
@@ -110,15 +115,17 @@ def train_loop(model, train_loader, criterion, optimizer):
         optimizer.zero_grad()
         outputs = model(images)
         labels = labels.type(torch.LongTensor).to(device)
-        # print(f"Predicted: {outputs[:,1]}, Target: {labels}")
-        loss = criterion(outputs[:,1], labels.float())
+        if binary_loss:
+            loss = criterion(outputs[:,1], labels.float())
+        else:
+            loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
     avg_loss = running_loss / len(train_loader)
     return avg_loss   
 
-def validate_loop(model, val_loader, criterion):
+def validate_loop(model, val_loader, criterion, binary_loss):
     model.eval()
     running_loss = 0.0
     all_preds = []
@@ -128,7 +135,10 @@ def validate_loop(model, val_loader, criterion):
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             labels = labels.type(torch.LongTensor).to(device)
-            loss = criterion(outputs[:, 1], labels.float())
+            if binary_loss:
+                loss = criterion(outputs[:, 1], labels.float())
+            else:
+                loss = criterion(outputs, labels)
             running_loss += loss.item()
             preds = torch.argmax(outputs, dim=1)
             all_preds.append(preds)
@@ -139,11 +149,18 @@ def validate_loop(model, val_loader, criterion):
     return avg_loss, all_preds, all_labels
 
 def calculate_metrics(preds, labels, model_settings):
-    accuracy = Accuracy(task='binary', num_classes=model_settings['num_classes']).to(device)
-    precision = Precision(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
-    recall = Recall(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
-    f1 = F1Score(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
-    confusion_matrix = ConfusionMatrix(task='binary', num_classes=model_settings['num_classes']).to(device)
+    if model_settings['num_classes'] == 2:
+        accuracy = Accuracy(task='binary', num_classes=model_settings['num_classes']).to(device)
+        precision = Precision(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
+        recall = Recall(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
+        f1 = F1Score(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
+        confusion_matrix = ConfusionMatrix(task='binary', num_classes=model_settings['num_classes']).to(device)
+    else:
+        accuracy = Accuracy(task='multiclass', num_classes=model_settings['num_classes']).to(device)
+        precision = Precision(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+        recall = Recall(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+        f1 = F1Score(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+        confusion_matrix = ConfusionMatrix(task='multiclass', num_classes=model_settings['num_classes']).to(device)
 
     acc = accuracy(preds, labels)
     prec = precision(preds, labels)
@@ -161,7 +178,7 @@ def main():
     train_setting = config['fine_tuning']
 
     wandb_logger = Logger(
-        f"finertuning_efficentnetb0_lr=0.0001_",
+        f"finetuning_efficentnetb0_lr=0.0001_",
         project='ArtForg')
     logger = wandb_logger.get_logger()
 

@@ -1,11 +1,12 @@
 data_settings:
     dataset_path: 'wikiart_data_batches/data_batches_filtered'
+    binary: False
 model:
     model_type: 'efficientnet' # resnet or efficientnet
-    num_classes: 2
+    num_classes: 10
     checkpoint_folder: 'checkpoints'
     continue_train: False
-    binary: True
+    binary: False
 fine_tuning:
     epochs: 50
     batch_size: 8
@@ -14,4 +15,3 @@ train:
     epochs: 100
     batch_size: 8
     learning_rate: 0.001
-
