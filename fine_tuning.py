@@ -54,7 +54,7 @@ def train(data_settings, model_settings, train_settings, logger):
         epoch_start = ckpt['epoch']
         print("Model's pretrained weights loaded!")
     if model_settings['binary']:
-        ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth", map_location=device)
+        ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
         model_weights = ckpt['model_weights']
         for name, param in model.named_parameters():
             if "fc" not in name:  # Exclude final fully connected layer
