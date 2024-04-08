@@ -26,7 +26,9 @@ class WikiArtDataset(Dataset):
         if transform is None:
             self.transform = transforms.Compose([
                 transforms.Resize(self.img_max_size),
-                transforms.ToTensor()
+                transforms.ToTensor(),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(5)
             ])
         else: 
             self.transform = transform
@@ -49,6 +51,8 @@ class WikiArtDataset(Dataset):
         
         # Cast to 0-10 integers label
         self.data_frame['label'] = np.nan
+        self.data_frame['AI'] = False
+
         self.data_frame.loc[self.data_frame['artist']==22, 'label'] = 0
         if not binary:
             self.data_frame.loc[self.data_frame['artist']==16, 'label'] = 1
@@ -65,13 +69,26 @@ class WikiArtDataset(Dataset):
 
         if binary:
         # Read in Vincent Fakes
-            for filename in os.listdir('Vincent_Fakes'):
-                filepath = os.path.join('Vincent_Fakes', filename)
+            for filename in os.listdir('AI/'):
+                filepath = os.path.join('AI/', filename)
                 if os.path.isfile(filepath):
                     # image = Image.open(filepath).convert('RGB').tobytes()
                     new_row = self.data_frame.iloc[0].copy()
                     new_row['image'] = {'path': filepath}
                     new_row['label'] = 1.0
+                    new_row['AI'] = True
+
+                    self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True)
+
+            for filename in os.listdir('Forgery/'):
+                filepath = os.path.join('Forgery/', filename)
+                if os.path.isfile(filepath):
+                    # image = Image.open(filepath).convert('RGB').tobytes()
+                    new_row = self.data_frame.iloc[0].copy()
+                    new_row['image'] = {'path': filepath}
+                    new_row['label'] = 1.0
+                    new_row['AI'] = False
+
                     self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True)
 
         print(self.data_frame.tail())
@@ -105,7 +122,10 @@ class WikiArtDataset(Dataset):
         # Apply transformations
         image = self.transform(image)
 
-        return image, label
+        AI = self.data_frame.iloc[idx]['AI']
+
+
+        return image, label, AI
 
 
 if __name__ == "__main__":
@@ -119,6 +139,6 @@ if __name__ == "__main__":
 
     print(len(dataset))
     for batch in train_dataloader:
-        images, label = batch
+        images, label, AI = batch
         #print(images)
         print(label)

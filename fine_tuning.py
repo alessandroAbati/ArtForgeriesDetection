@@ -102,15 +102,15 @@ def train(data_settings, model_settings, train_settings, logger):
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
             ckpt = {'epoch': epoch, 'model_weights': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
             if binary_loss:
-                torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth")
-            else:
                 torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth")
+            else:
+                torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth")
             min_loss = val_loss
 
 def train_loop(model, train_loader, criterion, optimizer, binary_loss):
     model.train()
     running_loss = 0.0
-    for images, labels in train_loader:
+    for images, labels, AI in train_loader:
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
         outputs = model(images)
@@ -131,7 +131,7 @@ def validate_loop(model, val_loader, criterion, binary_loss):
     all_preds = []
     all_labels = []
     with torch.no_grad():
-        for images, labels in val_loader:
+        for images, labels, AI in val_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             labels = labels.type(torch.LongTensor).to(device)
@@ -178,7 +178,7 @@ def main():
     train_setting = config['fine_tuning']
 
     wandb_logger = Logger(
-        f"finetuning_efficentnetb0_lr=0.0001_",
+        f"finertuning_efficentnetb0_lr=0.0001_",
         project='ArtForg')
     logger = wandb_logger.get_logger()
 
