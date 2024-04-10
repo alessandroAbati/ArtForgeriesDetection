@@ -5,6 +5,9 @@ import torch
 import torch.nn as nn
 from torchvision import models
 from efficientnet_pytorch import EfficientNet
+import torch.nn.functional as F
+import math
+
 
 class ResNetModel(nn.Module):
     def __init__(self, num_classes, resnet_version='resnet18', binary_classification=False):
@@ -38,7 +41,7 @@ class ResNetModel(nn.Module):
 
     def forward(self, x):
         if self.binary_classification:
-            return torch.sigmoid(self.model(x))[:,0]
+            return torch.sigmoid(self.model(x))
         else:
             return self.model(x)
     
@@ -55,13 +58,12 @@ class EfficientNetModel(nn.Module):
             self.model = EfficientNet.from_pretrained(efficientnet_version) # Load a pretrained EfficientNet model
         else:
             self.model = EfficientNet.from_name(efficientnet_version) # Load without pretrained weights
-
+        print(self.model._fc.in_features)
         num_features = self.model._fc.in_features
         if not binary_classification:
             self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
         else:
             self.model._fc = nn.Linear(num_features, num_classes)#Initially the pretrained art number of classes to load weights
-
 
         if checkpoint_path:
             print("Loading checkpoint")
@@ -83,6 +85,62 @@ class EfficientNetModel(nn.Module):
         self.model.load_state_dict(ckpt['model_weights'])
         print("Checkpoint retrieved!")
 
+class EfficientNetModelAttention(nn.Module):
+    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False):
+        super(EfficientNetModelAttention, self).__init__()
+        self.binary_classification = binary_classification
+
+        if checkpoint_path is None:
+            self.model = EfficientNet.from_pretrained(efficientnet_version) # Load a pretrained EfficientNet model
+        else:
+            self.model = EfficientNet.from_name(efficientnet_version) # Load without pretrained weights
+
+        self.model._avg_pooling = nn.Identity()
+        self.model._dropout = nn.Identity()
+        num_features = self.model._fc.in_features
+        print(num_features)
+        self.model._fc = nn.Identity()
+
+        self.attention = AttentionMultiHead(num_features, 512, 4)
+        if not binary_classification:
+            self.fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
+        else:
+            self.fc = nn.Linear(num_features, num_classes)#Initially the pretrained art number of classes to load weights
+
+        if checkpoint_path:
+            print("Loading checkpoint")
+            self.load_checkpoint(checkpoint_path) # Load checkpoint file
+
+    def forward(self, x):
+        if self.binary_classification:
+            features = self.model.extract_features(x)
+            features = features.permute(0, 2, 3, 1)
+            features = features.contiguous().view(features.size(0), -1,
+                                                              features.size(-1))
+            # print(features.shape)
+            context = self.attention(features).mean(1)
+            # print("Context")
+            # print(context.shape)
+            output = self.fc(context)
+            return torch.sigmoid(output)
+        else:
+            features = self.model.extract_features(x)
+            features = features.permute(0, 2, 3, 1)
+            features = features.contiguous().view(features.size(0), -1,
+                                                  features.size(-1))
+            context = self.attention(features).mean(1)
+            output = self.fc(context)
+            return output
+
+    def change_class_layer(self, num_classes):
+        num_features = self.model._fc.in_features
+        self.model._fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
+
+    def load_checkpoint(self, checkpoint_path):
+        ckpt = torch.load(f"{checkpoint_path}/efficientnet.pth")
+        self.model.load_state_dict(ckpt['model_weights'])
+        print("Checkpoint retrieved!")
+
 # class SwinTransformerModel(nn.Module):
 #     def __init__(self, num_classes, pretrained=True, model_name='swin_tiny_patch4_window7_224'):
 #         super(SwinTransformerModel, self).__init__()
@@ -90,4 +148,53 @@ class EfficientNetModel(nn.Module):
 #
 #     def forward(self, x):
 #         return self.swin_transformer(x)
+
+class AttentionMultiHead(nn.Module):
+
+    def __init__(self, input_size, hidden_size, nr_heads):
+        super(AttentionMultiHead, self).__init__()
+        self.hidden_size = hidden_size
+        self.heads = nn.ModuleList([])
+        self.heads.extend([SelfAttention(input_size, hidden_size) for idx_head in range(nr_heads)])
+        self.linear_out = nn.Linear(nr_heads * hidden_size, input_size)
+        return
+
+    def forward(self, input_vector):
+        all_heads = []
+        for head in self.heads:
+            out = head(input_vector)
+            all_heads.append(out)
+        z_out_concat = torch.cat(all_heads, dim=2)
+        z_out_out = F.relu(self.linear_out(z_out_concat))
+        # print(z_out_out.shape)
+        return z_out_out
+
+
+class SelfAttention(nn.Module):
+
+    def __init__(self, input_size, out_size):
+        super(SelfAttention, self).__init__()
+        self.dk_size = out_size
+        self.query_linear = nn.Linear(in_features=input_size, out_features=out_size)
+        self.key_linear = nn.Linear(in_features=input_size, out_features=out_size)
+        self.value_linear = nn.Linear(in_features=input_size, out_features=out_size)
+        self.softmax = nn.Softmax()
+        self.apply(self.init_weights)
+        return
+
+    def init_weights(self, m):
+        if type(m) == nn.Linear:
+            nn.init.xavier_uniform_(m.weight)
+            m.bias.data.fill_(0.01)
+
+    def forward(self, input_vector):
+        query_out = F.relu(self.query_linear(input_vector))
+        key_out = F.relu(self.key_linear(input_vector))
+
+        value_out = F.relu(self.value_linear(input_vector))
+        # out_q_k = torch.bmm(query_out, key_out.transpose(1, 2))
+        out_q_k = torch.div(torch.bmm(query_out, key_out.transpose(1, 2)), math.sqrt(self.dk_size))
+        softmax_q_k = self.softmax(out_q_k)
+        out_combine = torch.bmm(softmax_q_k, value_out)
+        return out_combine
 

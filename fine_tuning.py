@@ -3,7 +3,7 @@ import os
 from torch.utils.data import DataLoader, random_split
 import torch.nn.functional as F
 from utils import load_config
-from models import ResNetModel, EfficientNetModel
+from models import ResNetModel, EfficientNetModel, EfficientNetModelAttention
 from dataset import WikiArtDataset
 from logger import Logger
 from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
@@ -24,7 +24,8 @@ print(device)
 def weighted_bce_loss(output, target, weights=None):
     if weights is not None:
         assert len(weights) == 2
-
+        # print(output.shape)
+        # print(weights.shape)
         loss = weights[1] * (target * torch.log(output)) + \
                weights[0] * ((1 - target) * torch.log(1 - output))
     else:
@@ -48,6 +49,9 @@ def train(data_settings, model_settings, train_settings, logger):
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
         print("Model loaded")
+    elif model_settings['model_type'] == 'efficientnetattention':
+        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
+        print("Model loaded with Attention!")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
@@ -66,11 +70,14 @@ def train(data_settings, model_settings, train_settings, logger):
         epoch_start = ckpt['epoch']
         print("Model's pretrained weights loaded!")
     if model_settings['binary']:
-        ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
+        ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnet_fine.pth", map_location=device)
+        # ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
         model_weights = ckpt['model_weights']
         for name, param in model.named_parameters():
-            if "fc" not in name:  # Exclude final fully connected layer
-                param.data = model_weights[name]
+            # print(name)
+            if "fc" not in name:  # Exclude final fully connected layer and attention
+                if 'attention' not in name:
+                    param.data = model_weights[name]
         # model.load_state_dict(model_weights)
         print("Model's pretrained weights loaded!")
         binary_loss = True
@@ -80,7 +87,7 @@ def train(data_settings, model_settings, train_settings, logger):
         # original_tensor = torch.FloatTensor([0.946, 0.0385])
         original_tensor = torch.FloatTensor([1.0, 5.0]).to(device)
         batch_tensor = original_tensor.repeat(8, 1).to(device)
-        criterion = torch.nn.BCELoss(weight=batch_tensor).to(device)
+        criterion = torch.nn.BCELoss().to(device)
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
@@ -204,7 +211,7 @@ def main():
 
     wandb_logger = Logger(
         f"finertuning_efficentnetb0_lr=0.0001_",
-        project='ArtForg')
+        project='ArtForg_exp')
     logger = wandb_logger.get_logger()
 
     print("\n############## MODEL SETTINGS ##############")
