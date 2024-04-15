@@ -49,7 +49,7 @@ def plot_labels(features, true_labels, pred_labels, binary_labels, title):
 
     legend_elements = [
         Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=10, label='True, Non-AI'),
-        Line2D([0], [0], marker='x', color='blue', markerfacecolor='blue', markersize=10, label='Truee, AI-generated'),
+        Line2D([0], [0], marker='x', color='blue', markerfacecolor='blue', markersize=10, label='True, AI-generated'),
         Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='False, Non-AI'),
         Line2D([0], [0], marker='x', color='red', markerfacecolor='red', markersize=10, label='False, AI-generated')
     ]
@@ -79,7 +79,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_veryfine.pth", map_location=device)
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth", map_location=device)
     model_weights = ckpt['model_weights']
     model.load_state_dict(model_weights)
     print("Model's pretrained weights loaded!")
@@ -145,7 +145,7 @@ def main():
         f"finertuning_efficentnetb0_lr=0.0001_",
         project='ArtForg')
     logger = wandb_logger.get_logger()
-"""
+    """
     logger = None
 
     print("\n############## MODEL SETTINGS ##############")
