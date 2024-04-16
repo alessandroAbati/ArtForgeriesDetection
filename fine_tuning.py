@@ -9,7 +9,7 @@ import wandb
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from contrastive_losses import SupContLoss
+from contrastive_losses import SupContLoss, GramMatrixSimilarityLoss
 from dataset_v2 import WikiArtDataset
 
 torch.manual_seed(42)
@@ -19,7 +19,8 @@ torch.manual_seed(42)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-def contrastive_learning(data_settings, model_settings, train_settings, logger):
+def contrastive_learning(data_settings, model_settings, train_settings, logger, criterion='contloss'):
+    assert criterion in ['contloss', 'gram'], f"Criterion {criterion} is not valid, please chose between 'contloss' or 'gram'"
     # Dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'], contrastive=data_settings['contrastive'], contrastive_batch_size=data_settings['contrastive_batch_size'])  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
@@ -51,11 +52,27 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger):
             param.data = model_weights[name]
 
     # Contrastive Loss
-    criterion = SupContLoss(temperature=0.1)
+    if criterion == 'contloss':
+        criterion = SupContLoss(temperature=0.1)
+    elif criterion == 'gram':
+        criterion = GramMatrixSimilarityLoss(margin=1.0)
+
+        # Hook to get the features map after the last conv layer
+        extracted_features = []
+        #for name, module in model.named_modules(): # Printing layer names:
+        #    print(name, module)
+        def hook(module, input, output):
+            # output is the output of the hooked layer
+            #print(f"output: {output.squeeze().shape}\n{output.squeeze()}")
+            #extracted_features.append(output.squeeze().detach().cpu())
+            extracted_features.append(output.clone().detach().requires_grad_(True)) # This allow the gradient to be computed only for the layers before the hooked one (included)
+
+        # Register the hook
+        hook_handle = model.model._conv_head.register_forward_hook(hook) # We hook the last convolutional layer that has shape [320,1280] (SxC)
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(1):
+    for epoch in range(5):
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
@@ -64,9 +81,14 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger):
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(images)
-            #print(f"Output: {outputs.shape}")
-            labels = labels.type(torch.LongTensor).to(device)
-            loss = criterion(outputs)
+            if isinstance(criterion, GramMatrixSimilarityLoss):
+                current_feature_map = extracted_features[-1] # shape: [batch, channels, width, height]
+                flattened_feature_map = current_feature_map.reshape(4, 1280, -1) # Flatten height and width into a single dimension -> shape [batch, channels, width*height]
+                normalized_feature_map = torch.nn.functional.normalize(flattened_feature_map, p=2, dim=-1) # Normalize the feature map
+                gram_matrices =torch.bmm(normalized_feature_map, normalized_feature_map.transpose(1, 2)) # shape [bathc, channels, channels]
+                loss = criterion(gram_matrices)
+            elif isinstance(criterion, SupContLoss):
+                loss = criterion(outputs)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -78,6 +100,8 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger):
             ckpt = {'epoch': epoch, 'model_weights': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_loss
+
+    hook_handle.remove() 
 
     # Train the classifier with frozen encoder parameters
     train(data_settings, model_settings, train_settings, logger, frozen_encoder=True, contrastive=True)
@@ -257,7 +281,7 @@ def main():
     print()
     
     #train(data_setting, model_setting, train_setting, logger)
-    contrastive_learning(data_setting, model_setting, train_setting, logger)
+    contrastive_learning(data_setting, model_setting, train_setting, logger, criterion='contloss')
 
 if __name__ == '__main__':
     main()

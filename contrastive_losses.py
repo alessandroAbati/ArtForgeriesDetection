@@ -38,37 +38,41 @@ class SupContLoss(nn.Module):
 
 
 class GramMatrixSimilarityLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, margin=1.0):
         super(GramMatrixSimilarityLoss, self).__init__()
+        self.margin = margin  # Margin for contrastive loss
 
     def forward(self, gram_matrices):
         """
         Args:
             gram_matrices (torch.Tensor): tensor containing the Gram matrices of the samples in the batch.
                                           Shape should be [batch_size, C, C] where C is the number of channels.
+                                          Batch must be ordered as [anchor, positive, negative1, negative2, ...]
 
         Returns:
-            torch.Tensor: The mean similarity loss for the batch.
+            torch.Tensor: The contrastive loss value for the batch.
         """
-        # Extract the Gram matrix for the anchor
         anchor_gram = gram_matrices[0]
+        positive_gram = gram_matrices[1]
 
-        # Calculate similarities with the anchor
-        similarities = []
-        for i in range(1, gram_matrices.size(0)):
-            # Element-wise similarity (can be defined as negative squared distance)
-            similarity = -torch.mean((anchor_gram - gram_matrices[i]) ** 2)
-            similarities.append(similarity)
+        # Compute similarity between anchor and positive
+        positive_similarity = torch.mean((anchor_gram - positive_gram) ** 2)
 
-        # Concatenate all similarity scores and compute mean loss
-        loss = -torch.mean(torch.stack(similarities))
+        # Compute similarities between anchor and negatives
+        negative_similarities = []
+        for i in range(2, gram_matrices.size(0)):
+            negative_similarity = torch.mean((anchor_gram - gram_matrices[i]) ** 2)
+            negative_similarities.append(negative_similarity)
+        negative_similarity = torch.mean(torch.stack(negative_similarities))
+
+        loss = positive_similarity + torch.clamp(self.margin - negative_similarity, min=0.0) # Clamps all elements into the range [ min=0, max=None ].
         return loss
 
 if __name__ == "__main__":
     # Example Gram matrices for the purpose of this example
     # Let's assume C=20 for simplicity, batch_size=10 (1 anchor, 1 positive, 8 negatives)
     gram_matrices = torch.randn(10, 20, 20)
-    gram_similarity_loss = GramMatrixSimilarityLoss()
+    gram_similarity_loss = GramMatrixSimilarityLoss(margin=1.0)
     loss = gram_similarity_loss(gram_matrices)
     print("Gram Matrix Similarity Loss:", loss.item())
 

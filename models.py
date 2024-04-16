@@ -62,7 +62,7 @@ class EfficientNetModel(nn.Module):
             self.model = EfficientNet.from_name(efficientnet_version) # Load without pretrained weights
 
         num_features = self.model._fc.in_features
-        
+
         if self.frozen_encoder:
             for param in self.model.parameters():
                 param.requires_grad = False
@@ -74,7 +74,6 @@ class EfficientNetModel(nn.Module):
                 self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
             else:
                 self.model._fc = nn.Linear(num_features, num_classes) # Initially the pretrained art number of classes to load weights
-
 
         if checkpoint_path:
             print("Loading checkpoint")
