@@ -15,12 +15,14 @@ class WikiArtDataset(Dataset):
     artists = ["boris-kustodiev", "camille-pissarro", "childe-hassam", "claude-monet", "edgar-degas", "eugene-boudin", "gustave-dore", "ilya-repin", "ivan-aivazovsky", "ivan-shishkin", "john-singer-sargent", "marc-chagall", "martiros-saryan", "nicholas-roerich", "pablo-picasso", "paul-cezanne", "pierre-auguste-renoir", "pyotr-konchalovsky", "raphael-kirchner", "rembrandt", "salvador-dali", "vincent-van-gogh", "hieronymus-bosch", "leonardo-da-vinci", "albrecht-durer", "edouard-cortes", "sam-francis", "juan-gris", "lucas-cranach-the-elder", "paul-gauguin", "konstantin-makovsky", "egon-schiele", "thomas-eakins", "gustave-moreau", "francisco-goya", "edvard-munch", "henri-matisse", "fra-angelico", "maxime-maufra", "jan-matejko", "mstislav-dobuzhinsky", "alfred-sisley", "mary-cassatt", "gustave-loiseau", "fernando-botero", "zinaida-serebriakova", "georges-seurat", "isaac-levitan", "joaqu\u00e3\u00adn-sorolla", "jacek-malczewski", "berthe-morisot", "andy-warhol", "arkhip-kuindzhi", "niko-pirosmani", "james-tissot", "vasily-polenov", "valentin-serov", "pietro-perugino", "pierre-bonnard", "ferdinand-hodler", "bartolome-esteban-murillo", "giovanni-boldini", "henri-martin", "gustav-klimt", "vasily-perov", "odilon-redon", "tintoretto", "gene-davis", "raphael", "john-henry-twachtman", "henri-de-toulouse-lautrec", "antoine-blanchard", "david-burliuk", "camille-corot", "konstantin-korovin", "ivan-bilibin", "titian", "maurice-prendergast", "edouard-manet", "peter-paul-rubens", "aubrey-beardsley", "paolo-veronese", "joshua-reynolds", "kuzma-petrov-vodkin", "gustave-caillebotte", "lucian-freud", "michelangelo", "dante-gabriel-rossetti", "felix-vallotton", "nikolay-bogdanov-belsky", "georges-braque", "vasily-surikov", "fernand-leger", "konstantin-somov", "katsushika-hokusai", "sir-lawrence-alma-tadema", "vasily-vereshchagin", "ernst-ludwig-kirchner", "mikhail-vrubel", "orest-kiprensky", "william-merritt-chase", "aleksey-savrasov", "hans-memling", "amedeo-modigliani", "ivan-kramskoy", "utagawa-kuniyoshi", "gustave-courbet", "william-turner", "theo-van-rysselberghe", "joseph-wright", "edward-burne-jones", "koloman-moser", "viktor-vasnetsov", "anthony-van-dyck", "raoul-dufy", "frans-hals", "hans-holbein-the-younger", "ilya-mashkov", "henri-fantin-latour", "m.c.-escher", "el-greco", "mikalojus-ciurlionis", "james-mcneill-whistler", "karl-bryullov", "jacob-jordaens", "thomas-gainsborough", "eugene-delacroix", "canaletto"]
     label_to_artist = {i + 1: artist for i, artist in enumerate(artists)}
 
-    def __init__(self, data_dir, img_max_size=(512, 512), transform=None, binary=False):
+    def __init__(self, data_dir, img_max_size=(512, 512), transform=None, binary=False, contrastive=False, contrastive_batch_size=4):
         """
         Args:
             data_dir (string): Directory with parquet files (not used for images, only for reading parquet files).
             transform (callable, optional): Optional transform to be applied on a sample.
         """
+        self.contrastive = contrastive
+        self.contrastive_batch_size = contrastive_batch_size
         self.img_max_size = img_max_size
 
         if transform is None:
@@ -99,18 +101,54 @@ class WikiArtDataset(Dataset):
         print(count_real)
         print(f"Proportion of Forgery/AI: {count_forgery/1996}, {count_real/1996}")
 
-
+        if self.contrastive:
+            self.minority_data = self.data_frame[self.data_frame['label'] == 1].reset_index()
+            self.majority_data = self.data_frame[self.data_frame['label'] == 0].reset_index()
+            self.augmentation = transforms.Compose([
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(5),
+                transforms.ColorJitter(brightness=0.5),
+            ])
 
         # Creating batches
         # self.data_frame.to_parquet(f'wikiart_data_batches/data_batches_filtered/van{0}.parquet')
 
     def __len__(self):
+        if self.contrastive:
+            return len(self.minority_data)  # As many batches as minority samples
         return len(self.data_frame)
 
     def __getitem__(self, idx):
+        if self.contrastive:
+            # Get the anchor using idx
+            if self.minority_data.iloc[idx]['image']['path']:
+                anchor_image_path = self.minority_data.iloc[idx]['image']['path']
+                anchor_image = Image.open(anchor_image_path).convert('RGB')
+            else:
+                anchor_image_bytes = self.minority_data.iloc[idx]['image']['bytes']
+                image = Image.open(io.BytesIO(anchor_image_bytes)).convert('RGB')            
+            anchor_label = [self.minority_data.iloc[idx]['label'].astype(int)]
+
+            positive_image = self.augmentation(anchor_image) # Positive sample (augmented anchor)
+            positive_label = anchor_label
+
+            # Select two random negative samples
+            negative_indices = np.random.choice(self.majority_data.index, self.contrastive_batch_size-2, replace=False)
+            negative_images = [Image.open(self.majority_data.iloc[neg_idx]['image']['path']).convert('RGB') if self.majority_data.iloc[neg_idx]['image']['path'] else Image.open(io.BytesIO(self.majority_data.iloc[idx]['image']['bytes'])).convert('RGB') for neg_idx in negative_indices]
+            negative_labels = [self.majority_data.iloc[neg_idx]['label'].astype(int) for neg_idx in negative_indices]
+
+            # Apply transformations
+            anchor_image = self.transform(anchor_image)
+            positive_image = self.transform(positive_image)
+            negative_images = [self.transform(neg_image) for neg_image in negative_images]
+
+            # Combine all samples into one batch
+            images = torch.stack([anchor_image, positive_image] + negative_images)
+            labels = anchor_label + positive_label + negative_labels
+            return images, labels
+
         if torch.is_tensor(idx):
             idx = idx.tolist()
-
         # For Vincent Fakes
         if self.data_frame.iloc[idx]['image']['path']:
             filepath = self.data_frame.iloc[idx]['image']['path']
@@ -130,13 +168,13 @@ class WikiArtDataset(Dataset):
         image = self.transform(image)
 
         AI = self.data_frame.iloc[idx]['AI']
-
+        
         return image, label, AI
 
 
 if __name__ == "__main__":
 
-    dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batches_filtered'))  # Add your image transformations if needed
+    """dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batches_filtered'))  # Add your image transformations if needed
     # dataset = WikiArtDataset(data_dir='wikiart_data_batches/batch3')  # Add your image transformations if needed
     train_len = int(len(dataset) * 0.8)
     train_set, test_set = random_split(dataset, [train_len, len(dataset) - train_len])
@@ -147,4 +185,15 @@ if __name__ == "__main__":
     for batch in train_dataloader:
         images, label, AI = batch
         #print(images)
-        print(label)
+        print(f"Label {label}")
+        break"""
+    
+    #Contarstive learning daatset test
+    dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batches_filtered'), binary=True, contrastive=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
+    for batch in dataloader:
+        images, labels = batch
+        images = images.squeeze(0)
+        labels = torch.stack(labels, dim=0).reshape(len(labels))
+        print(f"Images: {images.shape}\nlabels: {labels.shape}\n{labels}") 
+        break

@@ -1,13 +1,9 @@
-# REF. SWIN-TRANSFORMER: https://python.plainenglish.io/swin-transformer-from-scratch-in-pytorch-31275152bf03
 
 # import timm
 import torch
 import torch.nn as nn
 from torchvision import models
 from efficientnet_pytorch import EfficientNet
-import torch.nn.functional as F
-import math
-
 
 class ResNetModel(nn.Module):
     def __init__(self, num_classes, resnet_version='resnet18', binary_classification=False):
@@ -41,7 +37,7 @@ class ResNetModel(nn.Module):
 
     def forward(self, x):
         if self.binary_classification:
-            return torch.sigmoid(self.model(x))
+            return torch.sigmoid(self.model(x))[:,0]
         else:
             return self.model(x)
     
@@ -50,20 +46,27 @@ class ResNetModel(nn.Module):
         self.model.load_state_dict(weights)
 
 class EfficientNetModel(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False):
+    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False, contrastive_learning=False):
         super(EfficientNetModel, self).__init__()
         self.binary_classification = binary_classification
+        self.contrastive_learning = contrastive_learning
 
+        projection_dimension = 100
+         
         if checkpoint_path is None:
             self.model = EfficientNet.from_pretrained(efficientnet_version) # Load a pretrained EfficientNet model
         else:
             self.model = EfficientNet.from_name(efficientnet_version) # Load without pretrained weights
-        print(self.model._fc.in_features)
+
         num_features = self.model._fc.in_features
-        if not binary_classification:
-            self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
+        if contrastive_learning:
+            self.model._fc = nn.Linear(num_features, projection_dimension) # Replace the classifier layer with a projection head
         else:
-            self.model._fc = nn.Linear(num_features, num_classes)#Initially the pretrained art number of classes to load weights
+            if not binary_classification:
+                self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
+            else:
+                self.model._fc = nn.Linear(num_features, num_classes) # Initially the pretrained art number of classes to load weights
+
 
         if checkpoint_path:
             print("Loading checkpoint")

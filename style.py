@@ -71,7 +71,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
 
     # Model
     if model_settings['model_type'] == 'resnet':
-        model = ResNetModel(resnet_version='resnet101',num_classes=model_settings['num_classes']).to(device)
+        raise ValueError("The style plot is supported only for efficientnet, please change the settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
         print("Model loaded")

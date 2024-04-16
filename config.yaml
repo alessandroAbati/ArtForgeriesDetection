@@ -1,8 +1,10 @@
 data_settings:
     dataset_path: 'wikiart_data_batches/data_batches_filtered'
     binary: True
+    contrastive: True
+    contrastive_batch_size: 4 # the bacth will always be formed by 1 anchor, 1 positive, batch_size-2 negatives
 model:
-    model_type: 'efficientnetattention' # resnet or efficientnet
+    model_type: 'efficientnet' # resnet or efficientnet
     num_classes: 2
     checkpoint_folder: 'checkpoints'
     continue_train: False
