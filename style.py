@@ -79,7 +79,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth", map_location=device)
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
     model_weights = ckpt['model_weights']
     model.load_state_dict(model_weights)
     print("Model's pretrained weights loaded!")
@@ -94,7 +94,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
     labels_list = np.array([])
 
     def hook(module, input, output):
-        # output is the feature map of the layer you hooked; detach and move to CPU
+        # output is the output of the hooked layer
         #print(f"output: {output.squeeze().shape}\n{output.squeeze()}")
         extracted_features.append(output.squeeze().detach().cpu())
 

@@ -48,10 +48,11 @@ class ResNetModel(nn.Module):
         self.model.load_state_dict(weights)
 
 class EfficientNetModel(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False, contrastive_learning=False):
+    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False, contrastive_learning=False, frozen_encoder=False):
         super(EfficientNetModel, self).__init__()
         self.binary_classification = binary_classification
         self.contrastive_learning = contrastive_learning
+        self.frozen_encoder = frozen_encoder
 
         projection_dimension = 100
          
@@ -61,6 +62,11 @@ class EfficientNetModel(nn.Module):
             self.model = EfficientNet.from_name(efficientnet_version) # Load without pretrained weights
 
         num_features = self.model._fc.in_features
+        
+        if self.frozen_encoder:
+            for param in self.model.parameters():
+                param.requires_grad = False
+
         if contrastive_learning:
             self.model._fc = nn.Linear(num_features, projection_dimension) # Replace the classifier layer with a projection head
         else:

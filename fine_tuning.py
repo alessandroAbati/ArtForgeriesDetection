@@ -55,7 +55,7 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger):
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(10):
+    for epoch in range(1):
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
@@ -79,9 +79,12 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger):
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_loss
 
+    # Train the classifier with frozen encoder parameters
+    train(data_settings, model_settings, train_settings, logger, frozen_encoder=True, contrastive=True)
+
     
 
-def train(data_settings, model_settings, train_settings, logger):
+def train(data_settings, model_settings, train_settings, logger, frozen_encoder=False, contrastive=False):
     # Dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
@@ -95,7 +98,7 @@ def train(data_settings, model_settings, train_settings, logger):
     if model_settings['model_type'] == 'resnet':
         model = ResNetModel(resnet_version='resnet101',num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
+        model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary'], frozen_encoder=frozen_encoder).to(device)
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
@@ -115,7 +118,10 @@ def train(data_settings, model_settings, train_settings, logger):
         epoch_start = ckpt['epoch']
         print("Model's pretrained weights loaded!")
     if model_settings['binary']:
-        ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
+        if contrastive:
+            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
+        else:
+            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
         model_weights = ckpt['model_weights']
         for name, param in model.named_parameters():
             if "fc" not in name:  # Exclude final fully connected layer
@@ -163,7 +169,10 @@ def train(data_settings, model_settings, train_settings, logger):
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
             ckpt = {'epoch': epoch, 'model_weights': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
             if binary_loss:
-                torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth")
+                if contrastive:
+                    torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
+                else:
+                    torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth")
             else:
                 torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth")
             min_loss = val_loss

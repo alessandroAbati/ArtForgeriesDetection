@@ -32,7 +32,7 @@ class SupContLoss(nn.Module):
         # Starting from index 1 to include the positive once in the denominator
         negatives_and_positive = torch.sum(torch.exp(similarities[1:] / self.temperature))
 
-        # Compute the contrastive loss using log and negative log likelihood
+        # Compute the contrastive loss using negative log likelihood
         loss = -torch.log(positives / negatives_and_positive)
         return loss
 
