@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from torchvision import models
 from efficientnet_pytorch import EfficientNet
+import torch.functional as F
+import math
 
 class ResNetModel(nn.Module):
     def __init__(self, num_classes, resnet_version='resnet18', binary_classification=False):
