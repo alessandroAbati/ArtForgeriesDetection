@@ -79,7 +79,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth", map_location=device)
     model_weights = ckpt['model_weights']
     model.load_state_dict(model_weights)
     print("Model's pretrained weights loaded!")
@@ -109,7 +109,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
             for label in AI_labels:
                 binary_labels.append(label)
             output = model(images)  # The hook captures the features
-            preds = torch.argmax(output, dim=1)
+            preds = torch.argmax(output, dim=1).cpu()
             pred_labels = np.concatenate((pred_labels, preds))
             
 
@@ -139,7 +139,7 @@ def main():
 
     data_setting = config['data_settings']
     model_setting = config['model']
-    train_setting = config['fine_tuning']
+    train_setting = config['train']
 
     """wandb_logger = Logger(
         f"finertuning_efficentnetb0_lr=0.0001_",

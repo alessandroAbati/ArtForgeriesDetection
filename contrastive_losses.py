@@ -17,7 +17,7 @@ class SupContLoss(nn.Module):
         Returns:
             torch.Tensor: The contrastive loss value.
         """
-        # Normalize the feature vectors to the unit sphere (L2 norm)
+        # Normalize the feature vectors to the unit sphere (L1 norm now)
         normalized_features = F.normalize(features, p=2, dim=1)
 
         # Calculate similarities: Dot product of anchor with all other features
@@ -26,7 +26,7 @@ class SupContLoss(nn.Module):
 
         # Exponentiate the similarities and scale by the temperature
         # The first term is the positive sample (index 1)
-        positives = torch.exp(similarities[1] / self.temperature)
+        positives = torch.sum(torch.exp(similarities[1:4] / self.temperature))
 
         # Sum the exponentiated similarities for all including the positive (to apply softmax)
         # Starting from index 1 to include the positive once in the denominator
@@ -71,14 +71,14 @@ class GramMatrixSimilarityLoss(nn.Module):
 if __name__ == "__main__":
     # Example Gram matrices for the purpose of this example
     # Let's assume C=20 for simplicity, batch_size=10 (1 anchor, 1 positive, 8 negatives)
-    gram_matrices = torch.randn(10, 20, 20)
-    gram_similarity_loss = GramMatrixSimilarityLoss(margin=1.0)
-    loss = gram_similarity_loss(gram_matrices)
-    print("Gram Matrix Similarity Loss:", loss.item())
+    # gram_matrices = torch.randn(10, 20, 20)
+    # gram_similarity_loss = GramMatrixSimilarityLoss(margin=1.0)
+    # loss = gram_similarity_loss(gram_matrices)
+    # print("Gram Matrix Similarity Loss:", loss.item())
 
     # Example tensor [2+n, 500] where n is number of negatives
     # Randomly generated features for the purpose of this example
-    """features = torch.randn(10, 500)  # n=8 negatives, 1 anchor, 1 positive
+    features = torch.randn(10, 500)  # n=8 negatives, 1 anchor, 1 positive
     sup_cont_loss = SupContLoss(temperature=0.05)
     loss = sup_cont_loss(features)
-    print("Contrastive Loss:", loss.item())"""
+    print("Contrastive Loss:", loss.item())

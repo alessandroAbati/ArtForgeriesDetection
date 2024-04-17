@@ -54,7 +54,7 @@ class EfficientNetModel(nn.Module):
         self.contrastive_learning = contrastive_learning
         self.frozen_encoder = frozen_encoder
 
-        projection_dimension = 100
+        projection_dimension = 128
          
         if checkpoint_path is None:
             self.model = EfficientNet.from_pretrained(efficientnet_version) # Load a pretrained EfficientNet model
@@ -68,12 +68,16 @@ class EfficientNetModel(nn.Module):
                 param.requires_grad = False
 
         if contrastive_learning:
-            self.model._fc = nn.Linear(num_features, projection_dimension) # Replace the classifier layer with a projection head
+            self.model._fc = nn.Sequential(
+                nn.Linear(num_features, 512),
+                nn.ReLU(),
+                nn.Linear(512, projection_dimension))# Replace the classifier layer with a projection head
         else:
-            if not binary_classification:
-                self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
-            else:
-                self.model._fc = nn.Linear(num_features, num_classes) # Initially the pretrained art number of classes to load weights
+            self.model._fc = nn.Sequential(
+                nn.Linear(num_features, 512),
+                nn.ReLU(),
+                nn.Linear(512, num_classes))  # Replace the classifier layer with a projection head
+                # self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
 
         if checkpoint_path:
             print("Loading checkpoint")
@@ -96,7 +100,7 @@ class EfficientNetModel(nn.Module):
         print("Checkpoint retrieved!")
 
 class EfficientNetModelAttention(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False):
+    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False, contrastive_learning=False, frozen_encoder=False):
         super(EfficientNetModelAttention, self).__init__()
         self.binary_classification = binary_classification
 
@@ -114,10 +118,23 @@ class EfficientNetModelAttention(nn.Module):
         # self.attention = AttentionMultiHead(num_features, 512, 4)
         self.attention = SelfAttentionCNN(in_dim=1280)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        if not binary_classification:
-            self.fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
+        if self.frozen_encoder:
+            print("Freezing weights")
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+        self.frozen_encoder = frozen_encoder
+        projection_dimension = 128
+        if contrastive_learning:
+            print("Contrastive Learning!")
+            self.model._fc = nn.Linear(num_features,
+                                       projection_dimension)  # Replace the classifier layer with a projection head
         else:
-            self.fc = nn.Linear(num_features, num_classes)#Initially the pretrained art number of classes to load weights
+            if not binary_classification:
+                self.model._fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
+            else:
+                self.model._fc = nn.Linear(num_features,
+                                           num_classes)  # Initially the pretrained art number of classes to load weights
 
         if checkpoint_path:
             print("Loading checkpoint")
@@ -135,7 +152,6 @@ class EfficientNetModelAttention(nn.Module):
             context, weights = self.attention(features)
             # print(context.shape)
             context = self.avgpool(context)
-            # print(context.shape)
             context = context.view(context.size(0), -1)
             output = self.fc(context)
 

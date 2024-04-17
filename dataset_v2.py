@@ -102,12 +102,13 @@ class WikiArtDataset(Dataset):
         print(f"Proportion of Forgery/AI: {count_forgery/1996}, {count_real/1996}")
 
         if self.contrastive:
-            self.minority_data = self.data_frame[self.data_frame['label'] == 1].reset_index()
-            self.majority_data = self.data_frame[self.data_frame['label'] == 0].reset_index()
+            self.minority_data = self.data_frame[self.data_frame['label'] == 1].reset_index(drop=True)
+            self.majority_data = self.data_frame[self.data_frame['label'] == 0].reset_index(drop=True)
             self.augmentation = transforms.Compose([
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomRotation(5),
                 transforms.ColorJitter(brightness=0.5),
+                transforms.RandomErasing(),
             ])
 
         # Creating batches
@@ -126,25 +127,34 @@ class WikiArtDataset(Dataset):
                 anchor_image = Image.open(anchor_image_path).convert('RGB')
             else:
                 anchor_image_bytes = self.minority_data.iloc[idx]['image']['bytes']
-                image = Image.open(io.BytesIO(anchor_image_bytes)).convert('RGB')            
-            anchor_label = [self.minority_data.iloc[idx]['label'].astype(int)]
+                image = Image.open(io.BytesIO(anchor_image_bytes)).convert('RGB')
 
-            positive_image = self.augmentation(anchor_image) # Positive sample (augmented anchor)
+            anchor_label = [self.minority_data.iloc[idx]['label'].astype(int)]
+            pos_idx = np.random.choice(self.minority_data.index, 1, replace=False)[0]
+            # print(pos_idx)
+            # print(self.minority_data.index)
+            # print(self.minority_data.columns)
+            # print(self.minority_data)
+
+            positive_image = Image.open(self.minority_data.iloc[pos_idx]['image']['path']).convert('RGB') if self.minority_data.iloc[pos_idx]['image']['path'] else Image.open(io.BytesIO(self.minority_data.iloc[pos_idx]['image']['bytes'])).convert('RGB')
+            positive_anchor_image = self.augmentation(anchor_image) # Positive sample (augmented anchor)
+            positive_image_pos = self.augmentation(positive_image) # Positive sample (augmented anchor)
             positive_label = anchor_label
 
             # Select two random negative samples
             negative_indices = np.random.choice(self.majority_data.index, self.contrastive_batch_size-2, replace=False)
-            negative_images = [Image.open(self.majority_data.iloc[neg_idx]['image']['path']).convert('RGB') if self.majority_data.iloc[neg_idx]['image']['path'] else Image.open(io.BytesIO(self.majority_data.iloc[idx]['image']['bytes'])).convert('RGB') for neg_idx in negative_indices]
+            negative_images = [Image.open(self.majority_data.iloc[neg_idx]['image']['path']).convert('RGB') if self.majority_data.iloc[neg_idx]['image']['path'] else Image.open(io.BytesIO(self.majority_data.iloc[neg_idx]['image']['bytes'])).convert('RGB') for neg_idx in negative_indices]
             negative_labels = [self.majority_data.iloc[neg_idx]['label'].astype(int) for neg_idx in negative_indices]
 
             # Apply transformations
             anchor_image = self.transform(anchor_image)
-            positive_image = self.transform(positive_image)
+            positive_anchor_image = self.transform(positive_anchor_image)
+            positive_image_pos = self.transform(positive_image_pos)
             negative_images = [self.transform(neg_image) for neg_image in negative_images]
 
             # Combine all samples into one batch
-            images = torch.stack([anchor_image, positive_image] + negative_images)
-            labels = anchor_label + positive_label + negative_labels
+            images = torch.stack([anchor_image, positive_anchor_image, positive_image_pos] + negative_images)
+            labels = anchor_label + positive_label + positive_label + negative_labels
             return images, labels
 
         if torch.is_tensor(idx):

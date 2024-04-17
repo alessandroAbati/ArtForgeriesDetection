@@ -37,6 +37,7 @@ def visualize_attention(img, attention_map):
     plt.show()
 
 # attention_weights = (attention_weights - attention_weights.min()) / (attention_weights.max() - attention_weights.min())
+# attention_weights = attention_weights.mean(dim=1)
 # visualize_attention(img, attention_weights)
 
 def contrastive_learning(data_settings, model_settings, train_settings, logger, criterion='contloss'):
@@ -44,7 +45,8 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger, 
     # Dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'], contrastive=data_settings['contrastive'], contrastive_batch_size=data_settings['contrastive_batch_size'])  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
-    train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
+    # train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
+    train_dataset = dataset
     print(f"Length Train dataset: {len(train_dataset)}")
 
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=False)
@@ -92,7 +94,7 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger, 
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(5):
+    for epoch in range(40):
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
@@ -120,8 +122,8 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger, 
             ckpt = {'epoch': epoch, 'model_weights': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_loss
-
-    hook_handle.remove() 
+    if criterion == 'gram':
+        hook_handle.remove()
 
     # Train the classifier with frozen encoder parameters
     train(data_settings, model_settings, train_settings, logger, frozen_encoder=True, contrastive=True)
@@ -145,7 +147,7 @@ def train(data_settings, model_settings, train_settings, logger, frozen_encoder=
         model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary'], frozen_encoder=frozen_encoder).to(device)
         print("Model loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
-        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
+        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary'], frozen_encoder=frozen_encoder).to(device)
         print("Model with Attention loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
@@ -271,9 +273,9 @@ def validate_loop(model, val_loader, criterion, binary_loss):
 def calculate_metrics(preds, labels, model_settings):
     if model_settings['num_classes'] == 2:
         accuracy = Accuracy(task='binary', num_classes=model_settings['num_classes']).to(device)
-        precision = Precision(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
-        recall = Recall(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
-        f1 = F1Score(task='binary', average='macro', num_classes=model_settings['num_classes']).to(device)
+        precision = Precision(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
+        recall = Recall(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
+        f1 = F1Score(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
         confusion_matrix = ConfusionMatrix(task='binary', num_classes=model_settings['num_classes']).to(device)
     else:
         accuracy = Accuracy(task='multiclass', num_classes=model_settings['num_classes']).to(device)
@@ -295,7 +297,7 @@ def main():
 
     data_setting = config['data_settings']
     model_setting = config['model']
-    train_setting = config['fine_tuning']
+    train_setting = config['train']
 
     wandb_logger = Logger(
         f"finertuning_efficentnetb0_lr=0.0001_",
@@ -306,8 +308,8 @@ def main():
     print(model_setting)
     print()
     
-    train(data_setting, model_setting, train_setting, logger)
-    # contrastive_learning(data_setting, model_setting, train_setting, logger, criterion='contloss')
+    # train(data_setting, model_setting, train_setting, logger)
+    contrastive_learning(data_setting, model_setting, train_setting, logger, criterion='contloss')
 
 if __name__ == '__main__':
     main()
