@@ -2,7 +2,7 @@ import torch
 import os
 from torch.utils.data import DataLoader, random_split
 from utils import load_config
-from models import ResNetModel, EfficientNetModel
+from models import ResNetModel, EfficientNetModel, EfficientNetModelAttention
 from logger import Logger
 from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
 import wandb
@@ -124,6 +124,9 @@ def train(data_settings, model_settings, train_settings, logger, frozen_encoder=
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary'], frozen_encoder=frozen_encoder).to(device)
         print("Model loaded")
+    elif model_settings['model_type'] == 'efficientnetAttention':
+        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
+        print("Model with Attention loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
@@ -145,12 +148,15 @@ def train(data_settings, model_settings, train_settings, logger, frozen_encoder=
         if contrastive:
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
         else:
-            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
+            # ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
+            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnet_fine.pth", map_location=device)
+
         model_weights = ckpt['model_weights']
         for name, param in model.named_parameters():
-            if "fc" not in name:  # Exclude final fully connected layer
-                param.data = model_weights[name]
-        # model.load_state_dict(model_weights)
+            # print(name)
+            if "fc" not in name:  # Exclude final fully connected layer and attention
+                if 'attention' not in name:
+                    param.data = model_weights[name]
         print("Model's pretrained weights loaded!")
         binary_loss = True
 
@@ -280,8 +286,8 @@ def main():
     print(model_setting)
     print()
     
-    #train(data_setting, model_setting, train_setting, logger)
-    contrastive_learning(data_setting, model_setting, train_setting, logger, criterion='contloss')
+    train(data_setting, model_setting, train_setting, logger)
+    # contrastive_learning(data_setting, model_setting, train_setting, logger, criterion='contloss')
 
 if __name__ == '__main__':
     main()

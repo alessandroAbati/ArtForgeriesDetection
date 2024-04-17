@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torchvision import models
 from efficientnet_pytorch import EfficientNet
-import torch.functional as F
+import torch.nn.functional as F
 import math
 
 class ResNetModel(nn.Module):
@@ -111,7 +111,9 @@ class EfficientNetModelAttention(nn.Module):
         print(num_features)
         self.model._fc = nn.Identity()
 
-        self.attention = AttentionMultiHead(num_features, 512, 4)
+        # self.attention = AttentionMultiHead(num_features, 512, 4)
+        self.attention = SelfAttentionCNN(in_dim=1280)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         if not binary_classification:
             self.fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
         else:
@@ -124,21 +126,28 @@ class EfficientNetModelAttention(nn.Module):
     def forward(self, x):
         if self.binary_classification:
             features = self.model.extract_features(x)
-            features = features.permute(0, 2, 3, 1)
-            features = features.contiguous().view(features.size(0), -1,
-                                                              features.size(-1))
+            # features = features.permute(0, 2, 3, 1)
             # print(features.shape)
-            context = self.attention(features).mean(1)
-            # print("Context")
+
+            # features = features.contiguous().view(features.size(0), -1,
+            #                                                   features.size(-1))
+            # print(features.shape)
+            context, weights = self.attention(features)
             # print(context.shape)
+            context = self.avgpool(context)
+            # print(context.shape)
+            context = context.view(context.size(0), -1)
             output = self.fc(context)
+
             return torch.sigmoid(output)
         else:
             features = self.model.extract_features(x)
             features = features.permute(0, 2, 3, 1)
-            features = features.contiguous().view(features.size(0), -1,
-                                                  features.size(-1))
-            context = self.attention(features).mean(1)
+            # features = features.contiguous().view(features.size(0), -1,
+            #                                       features.size(-1))
+            print(features.shape)
+            context, weights = self.attention(features)
+            context = self.avgpool(context)
             output = self.fc(context)
             return output
 
@@ -207,4 +216,25 @@ class SelfAttention(nn.Module):
         softmax_q_k = self.softmax(out_q_k)
         out_combine = torch.bmm(softmax_q_k, value_out)
         return out_combine
+
+
+class SelfAttentionCNN(nn.Module):
+    def __init__(self, in_dim):
+        super(SelfAttentionCNN, self).__init__()
+        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
+        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+    def forward(self, x):
+        batch_size, C, width, height = x.size()
+        query = self.query_conv(x).view(batch_size, -1, width*height).permute(0, 2, 1)
+        key = self.key_conv(x).view(batch_size, -1, width*height)
+        energy = torch.bmm(query, key)
+        attention = F.softmax(energy, dim=-1)
+        value = self.value_conv(x).view(batch_size, -1, width*height)
+        out = torch.bmm(value, attention.permute(0, 2, 1))
+        out = out.view(batch_size, C, width, height)
+        out = self.gamma*out + x
+        return out, attention
 
