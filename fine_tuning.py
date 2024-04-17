@@ -8,6 +8,7 @@ from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
 import wandb
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
 from contrastive_losses import SupContLoss, GramMatrixSimilarityLoss
 from dataset_v2 import WikiArtDataset
@@ -18,6 +19,25 @@ torch.manual_seed(42)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
+
+
+def visualize_attention(img, attention_map):
+    """
+    Visualize attention by overlaying the attention map on the image.
+    Args:
+        img (Tensor): The input image.
+        attention_map (Tensor): The attention map.
+    """
+    img = img.cpu().numpy().transpose((1, 2, 0))
+    attention_map = attention_map.cpu().detach().numpy()
+    attention_map = np.resize(attention_map, (img.shape[0], img.shape[1]))
+
+    plt.imshow(img, cmap='gray')
+    plt.imshow(attention_map, cmap='jet', alpha=0.5)
+    plt.show()
+
+# attention_weights = (attention_weights - attention_weights.min()) / (attention_weights.max() - attention_weights.min())
+# visualize_attention(img, attention_weights)
 
 def contrastive_learning(data_settings, model_settings, train_settings, logger, criterion='contloss'):
     assert criterion in ['contloss', 'gram'], f"Criterion {criterion} is not valid, please chose between 'contloss' or 'gram'"
