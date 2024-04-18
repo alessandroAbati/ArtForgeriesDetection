@@ -40,16 +40,13 @@ def visualize_attention(img, attention_map):
 # attention_weights = attention_weights.mean(dim=1)
 # visualize_attention(img, attention_weights)
 
-def contrastive_learning(og_dataset, data_settings, model_settings, train_settings, logger, criterion='contloss'):
+def contrastive_learning(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger, criterion='contloss'):
     assert criterion in ['contloss', 'gram'], f"Criterion {criterion} is not valid, please chose between 'contloss' or 'gram'"
     # Dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'], contrastive=data_settings['contrastive'], contrastive_batch_size=data_settings['contrastive_batch_size'])  # Add parameters as needed
-    train_size = int(0.8 * len(dataset)) # 80% training set
-    # train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
-    train_dataset = dataset
-    print(f"Length Train dataset: {len(train_dataset)}")
+    print(f"Length Train dataset: {len(dataset)}")
 
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=False)
+    train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     # Model
     if model_settings['model_type'] == 'resnet':
@@ -126,16 +123,16 @@ def contrastive_learning(og_dataset, data_settings, model_settings, train_settin
         hook_handle.remove()
 
     # Train the classifier with frozen encoder parameters
-    train(og_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=True, contrastive=True)
+    train(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=True, contrastive=True)
 
     
 
-def train(og_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=False, contrastive=False):
+def train(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=False, contrastive=False):
     # Dataset
     # dataset = og_dataset
-    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'], contrastive=False)  # Add parameters as needed
-    train_size = int(0.8 * len(dataset)) # 80% training set
-    train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
+    #dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'], contrastive=False)  # Add parameters as needed
+    #train_size = int(0.8 * len(dataset)) # 80% training set
+    #train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
     print(f"Length Train dataset: {len(train_dataset)}")
     print(f"Length Val dataset: {len(val_dataset)}")
 
@@ -310,10 +307,12 @@ def main():
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
-    og_dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
+    train_size = int(0.8 * len(dataset)) # 80% training set
+    train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
 
     # train(og_dataset, data_settings, model_setting, train_setting, logger)
-    contrastive_learning(og_dataset, data_settings, model_setting, train_setting, logger, criterion='contloss')
+    contrastive_learning(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, criterion='contloss')
 
 if __name__ == '__main__':
     main()

@@ -1,6 +1,5 @@
 import wandb
 
-
 class Logger:
 
     def __init__(self, experiment_name, logger_name='logger', project='inm705'):
@@ -11,6 +10,5 @@ class Logger:
 
     def get_logger(self):
         return self.logger
-
 
 
