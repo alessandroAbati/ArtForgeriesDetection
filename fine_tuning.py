@@ -40,7 +40,7 @@ def visualize_attention(img, attention_map):
 # attention_weights = attention_weights.mean(dim=1)
 # visualize_attention(img, attention_weights)
 
-def contrastive_learning(data_settings, model_settings, train_settings, logger, criterion='contloss'):
+def contrastive_learning(og_dataset, data_settings, model_settings, train_settings, logger, criterion='contloss'):
     assert criterion in ['contloss', 'gram'], f"Criterion {criterion} is not valid, please chose between 'contloss' or 'gram'"
     # Dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'], contrastive=data_settings['contrastive'], contrastive_batch_size=data_settings['contrastive_batch_size'])  # Add parameters as needed
@@ -85,7 +85,7 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger, 
         #    print(name, module)
         def hook(module, input, output):
             # output is the output of the hooked layer
-            #print(f"output: {output.squeeze().shape}\n{output.squeeze()}")
+            #print(f"output: {output.squeeze(..).shape}\n{output.squeeze()}")
             #extracted_features.append(output.squeeze().detach().cpu())
             extracted_features.append(output.clone().detach().requires_grad_(True)) # This allow the gradient to be computed only for the layers before the hooked one (included)
 
@@ -94,7 +94,7 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger, 
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(40):
+    for epoch in range(120):
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
@@ -126,16 +126,19 @@ def contrastive_learning(data_settings, model_settings, train_settings, logger, 
         hook_handle.remove()
 
     # Train the classifier with frozen encoder parameters
-    train(data_settings, model_settings, train_settings, logger, frozen_encoder=True, contrastive=True)
+    train(og_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=True, contrastive=True)
 
     
 
-def train(data_settings, model_settings, train_settings, logger, frozen_encoder=False, contrastive=False):
+def train(og_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=False, contrastive=False):
     # Dataset
-    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
+    # dataset = og_dataset
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'], contrastive=False)  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
     print(f"Length Train dataset: {len(train_dataset)}")
+    print(f"Length Val dataset: {len(val_dataset)}")
+
 
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)
@@ -295,21 +298,22 @@ def calculate_metrics(preds, labels, model_settings):
 def main():
     config = load_config()
 
-    data_setting = config['data_settings']
+    data_settings = config['data_settings']
     model_setting = config['model']
     train_setting = config['train']
 
     wandb_logger = Logger(
         f"finertuning_efficentnetb0_lr=0.0001_",
-        project='ArtForg')
+        project='ArtForgExp')
     logger = wandb_logger.get_logger()
 
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
-    
-    # train(data_setting, model_setting, train_setting, logger)
-    contrastive_learning(data_setting, model_setting, train_setting, logger, criterion='contloss')
+    og_dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
+
+    # train(og_dataset, data_settings, model_setting, train_setting, logger)
+    contrastive_learning(og_dataset, data_settings, model_setting, train_setting, logger, criterion='contloss')
 
 if __name__ == '__main__':
     main()

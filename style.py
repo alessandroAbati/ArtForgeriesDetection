@@ -65,6 +65,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
     print(f"Length Train dataset: {len(train_dataset)}")
+    print(f"Length Train dataset: {len(val_dataset)}")
 
     #train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)

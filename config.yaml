@@ -10,10 +10,10 @@ model:
     continue_train: False
     binary: True
 old_train:
-    epochs: 50
+    epochs: 20
     batch_size: 8
     learning_rate: 0.00002
 train:
-    epochs: 100
+    epochs: 20
     batch_size: 8
     learning_rate: 0.00002

@@ -28,9 +28,9 @@ class WikiArtDataset(Dataset):
         if transform is None:
             self.transform = transforms.Compose([
                 transforms.Resize(self.img_max_size),
-                transforms.ToTensor(),
                 transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(5)
+                transforms.RandomRotation(5),
+                transforms.ToTensor(),
             ])
         else: 
             self.transform = transform
@@ -108,7 +108,6 @@ class WikiArtDataset(Dataset):
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomRotation(5),
                 transforms.ColorJitter(brightness=0.5),
-                transforms.RandomErasing(),
             ])
 
         # Creating batches
