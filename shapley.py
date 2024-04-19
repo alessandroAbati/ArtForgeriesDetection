@@ -96,8 +96,9 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
 
     # Loading checkpoint
     binary_loss = False
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
-    model.load_state_dict(ckpt['model_state_dict'])
+    # ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
+    # model.load_state_dict(ckpt['model_state_dict'])
+    model = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
     for param in model.parameters():
         print(param.data)
 

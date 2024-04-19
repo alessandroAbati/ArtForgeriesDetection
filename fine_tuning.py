@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import torch
 import os
 from torch.utils.data import DataLoader, random_split
@@ -205,16 +203,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         logger.log({'train_loss': train_loss})
         logger.log({'validation_loss': val_loss})
         logger.log({'accuracy': acc, 'precision': prec, 'recall': rec, 'f1_score': f1_score})
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        cax = ax.matshow(conf_matrix.clone().detach().cpu().numpy(), cmap='bone')
-        fig.colorbar(cax)
-
-        # Save the figure to a wandb artifact
-        wandb.log({"confusion_matrix": wandb.Image(fig)})
-
-    	# Close the figure to prevent it from being displayed in the notebook
-        plt.close(fig)
         f, ax = plt.subplots(figsize = (15,10))
         sns.heatmap(conf_matrix.clone().detach().cpu().numpy(), annot=True, ax=ax)
         logger.log({"confusion_matrix": wandb.Image(f) })
@@ -222,13 +210,14 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         # Save checkpoint if improvement
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
-            ckpt = {'epoch': epoch, 'model_state_dict': deepcopy(model.state_dict()), 'optimizer_state': optimizer.state_dict()}
+            ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
             if binary_loss:
                 if contrastive:
                     print("Saving!")
+                    torch.save(model, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_model.pth")
                     torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
-                    for param in model.parameters():
-                        print(param.data)
+                    # for param in model.parameters():
+                    #     print(param.data)
                     # torch.save(model.state_dict(), f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_weights.pth")
 
                 else:
