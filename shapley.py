@@ -22,6 +22,13 @@ print(device)
 
 # def shapley(model, val_loader, criterion, binary_loss)
 
+def seed_torch(seed=42):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
 def validate_loop(model, val_loader, criterion, binary_loss):
     model.eval()
     running_loss = 0.0
@@ -31,6 +38,8 @@ def validate_loop(model, val_loader, criterion, binary_loss):
         for images, labels, AI in val_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
+            if labels.item() == 1.0:
+                print(outputs)
             labels = labels.type(torch.LongTensor).to(device)
             if binary_loss:
                 loss = criterion(outputs[:, 1], labels.float())
@@ -69,7 +78,7 @@ def calculate_metrics(preds, labels, model_settings):
 
 def inference(train_dataset, val_dataset, data_settings, model_settings, train_settings, frozen_encoder=False, contrastive=False):
     print(f"Length Val dataset: {len(val_dataset)}")
-    val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)
+    val_loader = DataLoader(val_dataset, 1, shuffle=False)
 
     # Model
     if model_settings['model_type'] == 'resnet':
@@ -87,10 +96,13 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
 
     # Loading checkpoint
     binary_loss = False
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth",
-                      map_location=device)
-    model_weights = ckpt['model_weights']
-    model.load_state_dict(model_weights)
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
+    model.load_state_dict(ckpt['model_state_dict'])
+    for param in model.parameters():
+        print(param.data)
+
+    # model.load_state_dict(torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_weights.pth"))
+
     print("Model's pretrained weights loaded!")
     binary_loss = True
 
@@ -118,6 +130,7 @@ def main():
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
+    seed_torch()
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])

@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import torch
 import os
 from torch.utils.data import DataLoader, random_split
@@ -19,7 +21,6 @@ torch.manual_seed(42)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-
 
 def visualize_attention(img, attention_map):
     """
@@ -138,7 +139,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
 
 
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
     # Model
     if model_settings['model_type'] == 'resnet':
@@ -188,49 +189,56 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
-
     # Training and validation loop
     min_loss = float('inf')
     for epoch in range(epoch_start, train_settings['epochs']):
+        model.train()
         train_loss = train_loop(model, train_loader, criterion, optimizer, binary_loss)
+        val_loss = train_loss
+        model.eval()
         val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss)
 
         # Calculate metrics
         acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels, model_settings)
 
         print(f'Epoch: {epoch+1}, Train_Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
-        logger.log({'train_loss': train_loss}) 
+        logger.log({'train_loss': train_loss})
         logger.log({'validation_loss': val_loss})
         logger.log({'accuracy': acc, 'precision': prec, 'recall': rec, 'f1_score': f1_score})
-        #fig = plt.figure()
-        #ax = fig.add_subplot(111)
-        #cax = ax.matshow(conf_matrix.clone().detach().cpu().numpy(), cmap='bone')
-        #fig.colorbar(cax)
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        cax = ax.matshow(conf_matrix.clone().detach().cpu().numpy(), cmap='bone')
+        fig.colorbar(cax)
 
         # Save the figure to a wandb artifact
-        #wandb.log({"confusion_matrix": wandb.Image(fig)})
+        wandb.log({"confusion_matrix": wandb.Image(fig)})
 
     	# Close the figure to prevent it from being displayed in the notebook
-        #plt.close(fig)
-        f, ax = plt.subplots(figsize = (15,10)) 
+        plt.close(fig)
+        f, ax = plt.subplots(figsize = (15,10))
         sns.heatmap(conf_matrix.clone().detach().cpu().numpy(), annot=True, ax=ax)
         logger.log({"confusion_matrix": wandb.Image(f) })
         plt.close(f)
         # Save checkpoint if improvement
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
-            ckpt = {'epoch': epoch, 'model_weights': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
+            ckpt = {'epoch': epoch, 'model_state_dict': deepcopy(model.state_dict()), 'optimizer_state': optimizer.state_dict()}
             if binary_loss:
                 if contrastive:
+                    print("Saving!")
                     torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
+                    for param in model.parameters():
+                        print(param.data)
+                    # torch.save(model.state_dict(), f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_weights.pth")
+
                 else:
                     torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth")
             else:
                 torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth")
             min_loss = val_loss
 
+
 def train_loop(model, train_loader, criterion, optimizer, binary_loss):
-    model.train()
     running_loss = 0.0
     for images, labels, AI in train_loader:
         images, labels = images.to(device), labels.to(device)
@@ -256,6 +264,8 @@ def validate_loop(model, val_loader, criterion, binary_loss):
         for images, labels, AI in val_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
+            if labels.item() == 1.0:
+                print(outputs)
             labels = labels.type(torch.LongTensor).to(device)
             if binary_loss:
                 loss = criterion(outputs[:, 1], labels.float())

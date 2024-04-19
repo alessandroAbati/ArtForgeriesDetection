@@ -25,6 +25,28 @@ torch.manual_seed(42)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
+def calculate_metrics(preds, labels, model_settings):
+    if model_settings['num_classes'] == 2:
+        accuracy = Accuracy(task='binary', num_classes=model_settings['num_classes']).to(device)
+        precision = Precision(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
+        recall = Recall(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
+        f1 = F1Score(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
+        confusion_matrix = ConfusionMatrix(task='binary', num_classes=model_settings['num_classes']).to(device)
+    else:
+        accuracy = Accuracy(task='multiclass', num_classes=model_settings['num_classes']).to(device)
+        precision = Precision(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+        recall = Recall(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+        f1 = F1Score(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
+        confusion_matrix = ConfusionMatrix(task='multiclass', num_classes=model_settings['num_classes']).to(device)
+
+    acc = accuracy(preds, labels)
+    prec = precision(preds, labels)
+    rec = recall(preds, labels)
+    f1_score = f1(preds, labels)
+    conf_matrix = confusion_matrix(preds, labels)
+
+    return acc, prec, rec, f1_score, conf_matrix
+
 def plot_labels(features, true_labels, pred_labels, binary_labels, title):
     fig, axes = plt.subplots(1, 2, figsize=(20, 8))
 
@@ -112,6 +134,12 @@ def extract_features(data_settings, model_settings, train_settings, logger):
             output = model(images)  # The hook captures the features
             preds = torch.argmax(output, dim=1).cpu()
             pred_labels = np.concatenate((pred_labels, preds))
+
+    acc, prec, rec, f1_score, conf_matrix = calculate_metrics(torch.tensor(pred_labels, device=device), torch.tensor(labels_list, device=device), model_settings)
+    print(f'Accuracy: {acc}, Precision: {prec},  Recall: {rec}, F1-Score: {f1_score}, Validation Loss: {1:.4f}')
+    f, ax = plt.subplots(figsize=(15, 10))
+    sns.heatmap(conf_matrix.clone().detach().cpu().numpy(), annot=True, ax=ax)
+    plt.show()
             
 
     hook_handle.remove() # Remove the hook to avoid memory leaks
