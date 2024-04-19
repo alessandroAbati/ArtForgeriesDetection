@@ -91,7 +91,7 @@ def contrastive_learning(train_dataset, val_dataset, data_settings, model_settin
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(120):
+    for epoch in range(100):
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
@@ -312,7 +312,9 @@ def main():
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
 
     # train(og_dataset, data_settings, model_setting, train_setting, logger)
-    contrastive_learning(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, criterion='contloss')
+    train(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, frozen_encoder=True,
+          contrastive=True)
+    # contrastive_learning(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, criterion='contloss')
 
 if __name__ == '__main__':
     main()
