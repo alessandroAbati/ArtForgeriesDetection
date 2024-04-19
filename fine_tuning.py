@@ -214,7 +214,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
             if binary_loss:
                 if contrastive:
                     print("Saving!")
-                    torch.save(model, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_model.pth")
+                    # torch.save(model, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_model.pth")
                     torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
                     # for param in model.parameters():
                     #     print(param.data)
