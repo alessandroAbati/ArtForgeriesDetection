@@ -43,15 +43,13 @@ def visualize_attention(img, attention_map):
     attention_map = attention_map.cpu().detach().numpy()
     # attention_map = np.max(attention_map, axis=0) # Average over all heads
     attention_map = np.mean(attention_map, axis=0) # Average over all heads
-
     attention_map = attention_map.reshape(int(np.sqrt(attention_map.shape[0])), int(np.sqrt(attention_map.shape[0]))) # Reshape to square shape
-
     attention_map = (attention_map - np.min(attention_map)) / (np.max(attention_map) - np.min(attention_map))
 
     # Resize image to match attention map size
-    img_resized = F.interpolate(img.unsqueeze(0), size=attention_map.shape, mode='bilinear', align_corners=False)
-    img_resized = img_resized.squeeze(0).permute(1, 2, 0) # [W, H, 3]
-    print(img_resized.shape)
+    # img_resized = F.interpolate(img.unsqueeze(0), size=attention_map.shape, mode='bilinear', align_corners=False)
+    # img_resized = img_resized.squeeze(0).permute(1, 2, 0) # [W, H, 3]
+    # print(img_resized.shape)
 
     plt.figure(figsize=(10, 10))
     plt.subplot(1, 2, 1)
@@ -59,9 +57,9 @@ def visualize_attention(img, attention_map):
     plt.title('Image')
 
     plt.subplot(1, 2, 2)
-    # plt.imshow(img_resized)
-    plt.imshow(attention_map, cmap='Greys_r') # Overlay attention map
+    im = plt.imshow(attention_map, cmap='Greys_r') # Overlay attention map
     plt.title('Attention Map')
+    plt.colorbar(im, fraction=0.046, pad=0.04) # Add colorbar as legend
     plt.show()
 
 def validate_loop(model, val_loader, criterion, binary_loss, attention = False):
