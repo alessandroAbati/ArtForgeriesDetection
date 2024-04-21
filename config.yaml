@@ -4,16 +4,16 @@ data_settings:
     contrastive: True
     contrastive_batch_size: 8 # the batch will always be formed by 1 anchor, 1 positive, batch_size-2 negatives
 model:
-    model_type: 'efficientnet' # resnet or efficientnet
+    model_type: 'efficientnetAttention' # resnet or efficientnet
     num_classes: 2
     checkpoint_folder: 'checkpoints'
     continue_train: False
     binary: True
 old_train:
-    epochs: 2
+    epochs: 10
     batch_size: 8
     learning_rate: 0.00002
 train:
-    epochs: 2
+    epochs: 10
     batch_size: 8
     learning_rate: 0.00002

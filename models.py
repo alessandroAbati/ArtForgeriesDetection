@@ -103,6 +103,7 @@ class EfficientNetModelAttention(nn.Module):
     def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False, contrastive_learning=False, frozen_encoder=False):
         super(EfficientNetModelAttention, self).__init__()
         self.binary_classification = binary_classification
+        self.frozen_encoder = frozen_encoder
 
         if checkpoint_path is None:
             self.model = EfficientNet.from_pretrained(efficientnet_version) # Load a pretrained EfficientNet model
@@ -123,18 +124,19 @@ class EfficientNetModelAttention(nn.Module):
             for param in self.model.parameters():
                 param.requires_grad = False
 
-        self.frozen_encoder = frozen_encoder
         projection_dimension = 128
         if contrastive_learning:
             print("Contrastive Learning!")
-            self.model._fc = nn.Linear(num_features,
-                                       projection_dimension)  # Replace the classifier layer with a projection head
+            self.fc = nn.Sequential(
+                nn.Linear(num_features, 512),
+                nn.ReLU(),
+                nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
-            if not binary_classification:
-                self.model._fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
-            else:
-                self.model._fc = nn.Linear(num_features,
-                                           num_classes)  # Initially the pretrained art number of classes to load weights
+            self.fc = nn.Sequential(
+                nn.Linear(num_features, 512),
+                nn.ReLU(),
+                nn.Linear(512, num_classes))
+
 
         if checkpoint_path:
             print("Loading checkpoint")
@@ -143,27 +145,18 @@ class EfficientNetModelAttention(nn.Module):
     def forward(self, x):
         if self.binary_classification:
             features = self.model.extract_features(x)
-            # features = features.permute(0, 2, 3, 1)
-            # print(features.shape)
-
-            # features = features.contiguous().view(features.size(0), -1,
-            #                                                   features.size(-1))
-            # print(features.shape)
             context, weights = self.attention(features)
             # print(context.shape)
             context = self.avgpool(context)
             context = context.view(context.size(0), -1)
             output = self.fc(context)
 
-            return torch.sigmoid(output)
+            return torch.sigmoid(output), weights
         else:
             features = self.model.extract_features(x)
-            features = features.permute(0, 2, 3, 1)
-            # features = features.contiguous().view(features.size(0), -1,
-            #                                       features.size(-1))
-            print(features.shape)
             context, weights = self.attention(features)
             context = self.avgpool(context)
+            context = context.view(context.size(0), -1)
             output = self.fc(context)
             return output
 

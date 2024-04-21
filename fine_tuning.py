@@ -20,21 +20,6 @@ torch.manual_seed(42)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
-def visualize_attention(img, attention_map):
-    """
-    Visualize attention by overlaying the attention map on the image.
-    Args:
-        img (Tensor): The input image.
-        attention_map (Tensor): The attention map.
-    """
-    img = img.cpu().numpy().transpose((1, 2, 0))
-    attention_map = attention_map.cpu().detach().numpy()
-    attention_map = np.resize(attention_map, (img.shape[0], img.shape[1]))
-
-    plt.imshow(img, cmap='gray')
-    plt.imshow(attention_map, cmap='jet', alpha=0.5)
-    plt.show()
-
 # attention_weights = (attention_weights - attention_weights.min()) / (attention_weights.max() - attention_weights.min())
 # attention_weights = attention_weights.mean(dim=1)
 # visualize_attention(img, attention_weights)
@@ -311,8 +296,10 @@ def main():
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
 
     # train(og_dataset, data_settings, model_setting, train_setting, logger)
-    train(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, frozen_encoder=True,
-          contrastive=True)
+    train(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, frozen_encoder=False,
+          contrastive=False)
+    # train(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, frozen_encoder=True,
+    #       contrastive=True)
     # contrastive_learning(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, criterion='contloss')
 
 if __name__ == '__main__':

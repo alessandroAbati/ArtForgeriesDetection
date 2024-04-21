@@ -2,7 +2,6 @@
 run_job.sh
 
 # Data dir
-wikiart_data_batches/
 
 
 # Wandb dir

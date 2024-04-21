@@ -9,6 +9,7 @@ import wandb
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import torch.nn.functional as F
 
 from contrastive_losses import SupContLoss, GramMatrixSimilarityLoss
 from dataset_v2 import WikiArtDataset
@@ -29,7 +30,41 @@ def seed_torch(seed=42):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-def validate_loop(model, val_loader, criterion, binary_loss):
+def visualize_attention(img, attention_map):
+    """
+    Visualize attention map on the image
+    img: [3, W, H] PyTorch tensor (image)
+    attention_map: [W*H, W*H] PyTorch tensor (attention map)
+    """
+    img = img.squeeze(0)
+    attention_map = attention_map.squeeze(0)
+    img = img.permute(1, 2, 0) # [W, H, 3]
+    print(img.shape)
+    attention_map = attention_map.cpu().detach().numpy()
+    # attention_map = np.max(attention_map, axis=0) # Average over all heads
+    attention_map = np.mean(attention_map, axis=0) # Average over all heads
+
+    attention_map = attention_map.reshape(int(np.sqrt(attention_map.shape[0])), int(np.sqrt(attention_map.shape[0]))) # Reshape to square shape
+
+    attention_map = (attention_map - np.min(attention_map)) / (np.max(attention_map) - np.min(attention_map))
+
+    # Resize image to match attention map size
+    img_resized = F.interpolate(img.unsqueeze(0), size=attention_map.shape, mode='bilinear', align_corners=False)
+    img_resized = img_resized.squeeze(0).permute(1, 2, 0) # [W, H, 3]
+    print(img_resized.shape)
+
+    plt.figure(figsize=(10, 10))
+    plt.subplot(1, 2, 1)
+    plt.imshow(img.cpu().detach().numpy())
+    plt.title('Image')
+
+    plt.subplot(1, 2, 2)
+    # plt.imshow(img_resized)
+    plt.imshow(attention_map, cmap='Greys_r') # Overlay attention map
+    plt.title('Attention Map')
+    plt.show()
+
+def validate_loop(model, val_loader, criterion, binary_loss, attention = False):
     model.eval()
     running_loss = 0.0
     all_preds = []
@@ -37,8 +72,12 @@ def validate_loop(model, val_loader, criterion, binary_loss):
     with torch.no_grad():
         for images, labels, AI in val_loader:
             images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
+            if attention:
+                outputs, weights = model(images)
+            else:
+                outputs = model(images)
             if labels.item() == 1.0:
+                visualize_attention(images, weights)
                 print(outputs)
             labels = labels.type(torch.LongTensor).to(device)
             if binary_loss:
@@ -79,7 +118,7 @@ def calculate_metrics(preds, labels, model_settings):
 def inference(train_dataset, val_dataset, data_settings, model_settings, train_settings, frozen_encoder=False, contrastive=False):
     print(f"Length Val dataset: {len(val_dataset)}")
     val_loader = DataLoader(val_dataset, 1, shuffle=False)
-
+    attention = False
     # Model
     if model_settings['model_type'] == 'resnet':
         model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
@@ -91,12 +130,13 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
         model = EfficientNetModelAttention(num_classes=model_settings['num_classes'], checkpoint_path=None,
                                            binary_classification=model_settings['binary']).to(device)
         print("Model with Attention loaded")
+        attention = True
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
     binary_loss = False
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth")
     model.load_state_dict(ckpt['model_state_dict'])
     # for param in model.parameters():
     #     print(param.data)
@@ -112,7 +152,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
-    val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss)
+    val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss, attention = attention)
     acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels, model_settings)
     print(f'Accuracy: {acc}, Precision: {prec},  Recall: {rec}, F1-Score: {f1_score}, Validation Loss: {val_loss:.4f}')
     f, ax = plt.subplots(figsize=(15, 10))
