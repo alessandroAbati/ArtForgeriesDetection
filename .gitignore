@@ -6,6 +6,10 @@ run_job.sh
 
 # Wandb dir
 wandb/
+# Checkpoints
+checkpoints/
+# Art batches
+wikiart_data_batches/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

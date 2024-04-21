@@ -132,13 +132,13 @@ class EfficientNetModelAttention(nn.Module):
             self.fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
-                nn.Dropout(0.2),
+                # nn.Dropout(0.2),
                 nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
             self.fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
-                nn.Dropout(0.2),
+                # nn.Dropout(0.2),
                 nn.Linear(512, num_classes))
 
 
@@ -154,8 +154,8 @@ class EfficientNetModelAttention(nn.Module):
             context = self.avgpool(context)
             context = context.view(context.size(0), -1)
             output = self.fc(context)
-            # return torch.sigmoid(output), weights
-            return torch.sigmoid(output)
+            return torch.sigmoid(output), weights
+            # return torch.sigmoid(output)
         #
         else:
             features = self.model.extract_features(x)
