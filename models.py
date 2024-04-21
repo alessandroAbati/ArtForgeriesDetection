@@ -1,4 +1,3 @@
-
 # import timm
 import torch
 import torch.nn as nn
@@ -7,59 +6,59 @@ from efficientnet_pytorch import EfficientNet
 import torch.nn.functional as F
 import math
 
+
 class ResNetModel(nn.Module):
     def __init__(self, num_classes, resnet_version='resnet18', binary_classification=False):
         super(ResNetModel, self).__init__()
         self.binary_classification = binary_classification
-        
-        self.model = getattr(models, resnet_version)() # Load a pretrained ResNet model
+
+        self.model = getattr(models, resnet_version)()  # Load a pretrained ResNet model
         torch.save(self.model.state_dict(), 'pretrain_weights/resnet_pretrain.pth')
 
-        
         # num_features = self.model.fc.in_features
         # print(num_features)
         # # print(list(self.model.children()))
         # self.model.fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
-        self.load_checkpoint('pretrain_weights/resnet_pretrain.pth') # Load checkpoint file
+        self.load_checkpoint('pretrain_weights/resnet_pretrain.pth')  # Load checkpoint file
 
         # Freeze layers
         for p in self.model.parameters():
-               p.requires_grad = False
+            p.requires_grad = False
         for c in list(self.model.children())[5:]:
-               for p in c.parameters():
-                      p.requires_grad = True
-
+            for p in c.parameters():
+                p.requires_grad = True
 
         num_features = self.model.fc.in_features
-        #print(num_features)
+        # print(num_features)
         # print(list(self.model.children()))
         self.model.fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
-        #print(list(self.model.children()))
-
+        # print(list(self.model.children()))
 
     def forward(self, x):
         if self.binary_classification:
-            return torch.sigmoid(self.model(x))[:,0]
+            return torch.sigmoid(self.model(x))[:, 0]
         else:
             return self.model(x)
-    
+
     def load_checkpoint(self, checkpoint_path):
         weights = torch.load(checkpoint_path)
         self.model.load_state_dict(weights)
 
+
 class EfficientNetModel(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False, contrastive_learning=False, frozen_encoder=False):
+    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None,
+                 binary_classification=False, contrastive_learning=False, frozen_encoder=False):
         super(EfficientNetModel, self).__init__()
         self.binary_classification = binary_classification
         self.contrastive_learning = contrastive_learning
         self.frozen_encoder = frozen_encoder
 
         projection_dimension = 128
-         
+
         if checkpoint_path is None:
-            self.model = EfficientNet.from_pretrained(efficientnet_version) # Load a pretrained EfficientNet model
+            self.model = EfficientNet.from_pretrained(efficientnet_version)  # Load a pretrained EfficientNet model
         else:
-            self.model = EfficientNet.from_name(efficientnet_version) # Load without pretrained weights
+            self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
 
         num_features = self.model._fc.in_features
 
@@ -71,17 +70,19 @@ class EfficientNetModel(nn.Module):
             self.model._fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
-                nn.Linear(512, projection_dimension))# Replace the classifier layer with a projection head
+                nn.Dropout(0.2),
+                nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
             self.model._fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
+                nn.Dropout(0.2),
                 nn.Linear(512, num_classes))  # Replace the classifier layer with a projection head
-                # self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
+            # self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
 
         if checkpoint_path:
             print("Loading checkpoint")
-            self.load_checkpoint(checkpoint_path) # Load checkpoint file
+            self.load_checkpoint(checkpoint_path)  # Load checkpoint file
 
     def forward(self, x):
         if self.binary_classification:
@@ -99,15 +100,18 @@ class EfficientNetModel(nn.Module):
         self.model.load_state_dict(ckpt['model_weights'])
         print("Checkpoint retrieved!")
 
+
 class EfficientNetModelAttention(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None, binary_classification=False, contrastive_learning=False, frozen_encoder=False):
+    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None,
+                 binary_classification=False, contrastive_learning=False, frozen_encoder=False):
         super(EfficientNetModelAttention, self).__init__()
         self.binary_classification = binary_classification
+        self.frozen_encoder = frozen_encoder
 
         if checkpoint_path is None:
-            self.model = EfficientNet.from_pretrained(efficientnet_version) # Load a pretrained EfficientNet model
+            self.model = EfficientNet.from_pretrained(efficientnet_version)  # Load a pretrained EfficientNet model
         else:
-            self.model = EfficientNet.from_name(efficientnet_version) # Load without pretrained weights
+            self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
 
         self.model._avg_pooling = nn.Identity()
         self.model._dropout = nn.Identity()
@@ -123,47 +127,41 @@ class EfficientNetModelAttention(nn.Module):
             for param in self.model.parameters():
                 param.requires_grad = False
 
-        self.frozen_encoder = frozen_encoder
         projection_dimension = 128
         if contrastive_learning:
             print("Contrastive Learning!")
-            self.model._fc = nn.Linear(num_features,
-                                       projection_dimension)  # Replace the classifier layer with a projection head
+            self.fc = nn.Sequential(
+                nn.Linear(num_features, 512),
+                nn.ReLU(),
+                # nn.Dropout(0.2),
+                nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
-            if not binary_classification:
-                self.model._fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
-            else:
-                self.model._fc = nn.Linear(num_features,
-                                           num_classes)  # Initially the pretrained art number of classes to load weights
+            self.fc = nn.Sequential(
+                nn.Linear(num_features, 512),
+                nn.ReLU(),
+                # nn.Dropout(0.2),
+                nn.Linear(512, num_classes))
 
         if checkpoint_path:
             print("Loading checkpoint")
-            self.load_checkpoint(checkpoint_path) # Load checkpoint file
+            self.load_checkpoint(checkpoint_path)  # Load checkpoint file
 
     def forward(self, x):
         if self.binary_classification:
             features = self.model.extract_features(x)
-            # features = features.permute(0, 2, 3, 1)
-            # print(features.shape)
-
-            # features = features.contiguous().view(features.size(0), -1,
-            #                                                   features.size(-1))
-            # print(features.shape)
             context, weights = self.attention(features)
             # print(context.shape)
             context = self.avgpool(context)
             context = context.view(context.size(0), -1)
             output = self.fc(context)
-
-            return torch.sigmoid(output)
+            return torch.sigmoid(output), weights
+            # return torch.sigmoid(output)
+        #
         else:
             features = self.model.extract_features(x)
-            features = features.permute(0, 2, 3, 1)
-            # features = features.contiguous().view(features.size(0), -1,
-            #                                       features.size(-1))
-            print(features.shape)
             context, weights = self.attention(features)
             context = self.avgpool(context)
+            context = context.view(context.size(0), -1)
             output = self.fc(context)
             return output
 
@@ -175,6 +173,7 @@ class EfficientNetModelAttention(nn.Module):
         ckpt = torch.load(f"{checkpoint_path}/efficientnet.pth")
         self.model.load_state_dict(ckpt['model_weights'])
         print("Checkpoint retrieved!")
+
 
 # class SwinTransformerModel(nn.Module):
 #     def __init__(self, num_classes, pretrained=True, model_name='swin_tiny_patch4_window7_224'):
@@ -237,20 +236,19 @@ class SelfAttention(nn.Module):
 class SelfAttentionCNN(nn.Module):
     def __init__(self, in_dim):
         super(SelfAttentionCNN, self).__init__()
-        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
-        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
+        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
         self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
         batch_size, C, width, height = x.size()
-        query = self.query_conv(x).view(batch_size, -1, width*height).permute(0, 2, 1)
-        key = self.key_conv(x).view(batch_size, -1, width*height)
+        query = self.query_conv(x).view(batch_size, -1, width * height).permute(0, 2, 1)
+        key = self.key_conv(x).view(batch_size, -1, width * height)
         energy = torch.bmm(query, key)
         attention = F.softmax(energy, dim=-1)
-        value = self.value_conv(x).view(batch_size, -1, width*height)
+        value = self.value_conv(x).view(batch_size, -1, width * height)
         out = torch.bmm(value, attention.permute(0, 2, 1))
         out = out.view(batch_size, C, width, height)
-        out = self.gamma*out + x
+        out = self.gamma * out + x
         return out, attention
-
