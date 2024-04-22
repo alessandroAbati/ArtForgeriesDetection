@@ -40,8 +40,8 @@ class WikiArtDataset(Dataset):
                "karl-bryullov", "jacob-jordaens", "thomas-gainsborough", "eugene-delacroix", "canaletto"]
     label_to_artist = {i + 1: artist for i, artist in enumerate(artists)}
 
-    def __init__(self, data_dir, img_size=(512, 512), transform=None, binary=False, contrastive=False,
-                 contrastive_batch_size=4):
+    def __init__(self, data_dir, img_size=(512, 512), transform=None, binary=False, 
+                 contrastive=False, contrastive_batch_size=4):
         """
         Args:
             data_dir (string): Directory with wikiart dataset files.

@@ -11,7 +11,7 @@ class SupContLoss(nn.Module):
         """
         Args:
             features (torch.Tensor): tensor containing the features of the samples in the batch.
-                                      Shape should be [2+n, feature_dim] where 2 is for the anchor and its positive,
+                                      Shape should be [4+n, feature_dim] where 4 is for the anchor and its positive,
                                       and n is the number of negatives.
 
         Returns:
@@ -20,16 +20,13 @@ class SupContLoss(nn.Module):
         # Normalize the feature vectors to the unit sphere (L1 norm now)
         normalized_features = F.normalize(features, p=2, dim=1)
 
-        # Calculate similarities: Dot product of anchor with all other features
-        # The first vector (anchor) with all others including the positive and negatives
-        similarities = torch.matmul(normalized_features, normalized_features[0].unsqueeze(1)).squeeze()
+        # Calculate similarities with the anchor (index=0)
+        similarities = torch.matmul(normalized_features, normalized_features[0].unsqueeze(1)).squeeze() # Dot product of anchor with all other features
 
-        # Exponentiate the similarities and scale by the temperature
-        # The first term is the positive sample (index 1)
-        positives = torch.sum(torch.exp(similarities[1:4] / self.temperature))
+        # Get similarities between anchor and positives (from index=1, the first 3 samples are positive sample)
+        positives = torch.sum(torch.exp(similarities[1:4] / self.temperature)) # Exponentiate the similarities and scale by the temperature
 
-        # Sum the exponentiated similarities for all including the positive (to apply softmax)
-        # Starting from index 1 to include the positive once in the denominator
+        # Get similarities between anchor and all the other samples
         negatives_and_positive = torch.sum(torch.exp(similarities[1:] / self.temperature))
 
         # Compute the contrastive loss using negative log likelihood
@@ -46,8 +43,10 @@ class GramMatrixSimilarityLoss(nn.Module):
         """
         Args:
             gram_matrices (torch.Tensor): tensor containing the Gram matrices of the samples in the batch.
-                                          Shape should be [batch_size, C, C] where C is the number of channels.
-                                          Batch must be ordered as [anchor, positive, negative1, negative2, ...]
+                                          Shape should be [4+n, C, C] where 4 is for the anchor and its positive,
+                                          n is the number of negatives,
+                                          and C is the number of channels.
+                                          Batch must be ordered as [anchor, positives, negatives]
 
         Returns:
             torch.Tensor: The contrastive loss value for the batch.
