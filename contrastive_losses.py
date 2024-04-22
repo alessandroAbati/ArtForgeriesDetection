@@ -3,39 +3,43 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SupContLoss(nn.Module):
-    def __init__(self, temperature=0.1):
+    # This class is based on the loss function presented in Supervised Contrastive Learning (https://arxiv.org/abs/2004.11362)
+    def __init__(self, positive_samples: int, temperature=0.1):
         super(SupContLoss, self).__init__()
+        """
+        Args:
+            positive_samples (int): Number of positive samples (including the anchor)
+            temperature (float): Temperature parameter of the supervised contastive loss function
+        """
+        self.m = positive_samples
         self.temperature = temperature
 
     def forward(self, features):
         """
         Args:
             features (torch.Tensor): tensor containing the features of the samples in the batch.
-                                      Shape should be [2+n, feature_dim] where 2 is for the anchor and its positive,
-                                      and n is the number of negatives.
+                                      Shape should be [m+n, feature_dim] where m is for positive samples (including the anchor),
+                                      and n is the number of negative samples.
+                                      Batch must be ordered as [anchor, positives, negatives]
 
         Returns:
             torch.Tensor: The contrastive loss value.
         """
-        # Normalize the feature vectors to the unit sphere (L1 norm now)
+        # Normalize the feature vectors to the unit sphere (L2 norm)
         normalized_features = F.normalize(features, p=2, dim=1)
 
-        # Calculate similarities: Dot product of anchor with all other features
-        # The first vector (anchor) with all others including the positive and negatives
-        similarities = torch.matmul(normalized_features, normalized_features[0].unsqueeze(1)).squeeze()
+        # Calculate similarities: the first vector (anchor) with all others including the positive and negatives
+        similarities = torch.matmul(normalized_features, normalized_features[0].unsqueeze(1)).squeeze() # Dot product of anchor with all other features
+        
+        # From index = 1, the first self.m samples are positive samples
+        positives = torch.sum(torch.exp(similarities[1:self.m] / self.temperature)) # Exponentiate the similarities and scale by the temperature
 
-        # Exponentiate the similarities and scale by the temperature
-        # The first term is the positive sample (index 1)
-        positives = torch.sum(torch.exp(similarities[1:4] / self.temperature))
-
-        # Sum the exponentiated similarities for all including the positive (to apply softmax)
-        # Starting from index 1 to include the positive once in the denominator
+        # Sum the exponentiated similarities for all samples except the anchor
         negatives_and_positive = torch.sum(torch.exp(similarities[1:] / self.temperature))
 
         # Compute the contrastive loss using negative log likelihood
         loss = -torch.log(positives / negatives_and_positive)
         return loss
-
 
 class GramMatrixSimilarityLoss(nn.Module):
     def __init__(self, margin=1.0):
@@ -47,7 +51,7 @@ class GramMatrixSimilarityLoss(nn.Module):
         Args:
             gram_matrices (torch.Tensor): tensor containing the Gram matrices of the samples in the batch.
                                           Shape should be [batch_size, C, C] where C is the number of channels.
-                                          Batch must be ordered as [anchor, positive, negative1, negative2, ...]
+                                          Batch must be ordered as [anchor, positives, negatives]
 
         Returns:
             torch.Tensor: The contrastive loss value for the batch.
