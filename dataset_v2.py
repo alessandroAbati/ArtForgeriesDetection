@@ -173,7 +173,7 @@ class WikiArtDataset(Dataset):
             positive_label = anchor_label
 
             # Select two random negative samples
-            negative_indices = np.random.choice(self.majority_data.index, self.contrastive_batch_size - 2,
+            negative_indices = np.random.choice(self.majority_data.index, self.contrastive_batch_size - 4,
                                                 replace=False)
             negative_images = [Image.open(self.majority_data.iloc[neg_idx]['image']['path']).convert('RGB') if
                                self.majority_data.iloc[neg_idx]['image']['path'] else Image.open(
@@ -184,11 +184,12 @@ class WikiArtDataset(Dataset):
             # Apply transformations
             anchor_image = self.transform(anchor_image)
             positive_anchor_image = self.transform(positive_anchor_image)
+            positive_image = self.transform(positive_image)
             positive_image_pos = self.transform(positive_image_pos)
             negative_images = [self.transform(neg_image) for neg_image in negative_images]
 
             # Combine all samples into one batch
-            images = torch.stack([anchor_image, positive_anchor_image, positive_image_pos] + negative_images)
+            images = torch.stack([anchor_image, positive_anchor_image, positive_image, positive_image_pos] + negative_images)
             labels = anchor_label + positive_label + positive_label + negative_labels
             return images, labels
 

@@ -133,13 +133,13 @@ class EfficientNetModelAttention(nn.Module):
             self.fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
-                # nn.Dropout(0.2),
+                nn.Dropout(0.2),
                 nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
             self.fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
-                # nn.Dropout(0.2),
+                nn.Dropout(0.2),
                 nn.Linear(512, num_classes))
 
         if checkpoint_path:

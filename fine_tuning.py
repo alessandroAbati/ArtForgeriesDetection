@@ -9,6 +9,8 @@ import wandb
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import torch.nn.functional as F
+
 
 from contrastive_losses import SupContLoss, GramMatrixSimilarityLoss
 from dataset_v2 import WikiArtDataset
@@ -20,10 +22,16 @@ torch.manual_seed(42)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
+def weighted_bce_loss(output, target, weights=None):
+    if weights is not None:
+        assert len(weights) == 2
 
-# attention_weights = (attention_weights - attention_weights.min()) / (attention_weights.max() - attention_weights.min())
-# attention_weights = attention_weights.mean(dim=1)
-# visualize_attention(img, attention_weights)
+        loss = weights[1] * (target * torch.log(output)) + \
+               weights[0] * ((1 - target) * torch.log(1 - output))
+    else:
+        loss = target * torch.log(output) + (1 - target) * torch.log(1 - output)
+
+    return torch.neg(torch.mean(loss))
 
 def contrastive_learning(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger,
                          criterion='contloss'):
@@ -179,7 +187,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         model_weights = ckpt['model_weights']
         for name, param in model.named_parameters():
             # print(name)
-            if "fc" not in name:  # Exclude final fully connected layer and attention
+            if "fc" not in name:  # Exclude final fully connected layer and attention module
                 if 'attention' not in name:
                     param.data = model_weights[name]
         print("Model's pretrained weights loaded!")
@@ -241,6 +249,10 @@ def train_loop(model, train_loader, criterion, optimizer, binary_loss):
         labels = labels.type(torch.LongTensor).to(device)
         if binary_loss:
             loss = criterion(outputs[:, 1], labels.float())
+            one_hot_labels = F.one_hot(labels, num_classes=2).to(device)
+            original_tensor = torch.FloatTensor([1.0, 5.0]).to(device)
+            batch_tensor = original_tensor.repeat(one_hot_labels.size(0), 1).to(device)
+            loss = weighted_bce_loss(outputs, one_hot_labels.float(), original_tensor)
         else:
             loss = criterion(outputs, labels)
         loss.backward()
@@ -307,8 +319,8 @@ def main():
     train_setting = config['train']
 
     wandb_logger = Logger(
-        f"finertuning_efficentnetb0_lr=0.0001_",
-        project='ArtForgExp')
+        f"SelAttentionExp",
+        project='ArtForgExpNew')
     logger = wandb_logger.get_logger()
 
     print("\n############## MODEL SETTINGS ##############")
