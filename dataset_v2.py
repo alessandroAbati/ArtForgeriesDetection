@@ -12,7 +12,6 @@ import numpy as np
 
 torch.manual_seed(42)
 
-
 class WikiArtDataset(Dataset):
     artists = ["boris-kustodiev", "camille-pissarro", "childe-hassam", "claude-monet", "edgar-degas", "eugene-boudin",
                "gustave-dore", "ilya-repin", "ivan-aivazovsky", "ivan-shishkin", "john-singer-sargent", "marc-chagall",
@@ -41,20 +40,24 @@ class WikiArtDataset(Dataset):
                "karl-bryullov", "jacob-jordaens", "thomas-gainsborough", "eugene-delacroix", "canaletto"]
     label_to_artist = {i + 1: artist for i, artist in enumerate(artists)}
 
-    def __init__(self, data_dir, img_max_size=(512, 512), transform=None, binary=False, contrastive=False,
+    def __init__(self, data_dir, img_size=(512, 512), transform=None, binary=False, contrastive=False,
                  contrastive_batch_size=4):
         """
         Args:
-            data_dir (string): Directory with parquet files (not used for images, only for reading parquet files).
+            data_dir (string): Directory with wikiart dataset files.
+            img_size (int, int): Desired image size.
             transform (callable, optional): Optional transform to be applied on a sample.
+            binary (bool, optional): Parameter to select multiclass or binary data, default is multiclass.
+            contrastive (bool, optional): Parameter to select contrastive dataset, default is false.
+            contrastive_batch_size (int, optional): Batch size for the contrastive learning
         """
         self.contrastive = contrastive
         self.contrastive_batch_size = contrastive_batch_size
-        self.img_max_size = img_max_size
+        self.img_size = img_size
 
         if transform is None:
             self.transform = transforms.Compose([
-                transforms.Resize(self.img_max_size),
+                transforms.Resize(self.img_size),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomRotation(5),
                 transforms.ToTensor(),
@@ -62,29 +65,26 @@ class WikiArtDataset(Dataset):
         else:
             self.transform = transform
 
-        # Use glob to find all parquet files in the directory
-        # Create batches
-        # parquet_files = glob.glob(os.path.join(data_dir, 'train-0**.parquet'))
-        # For filtered batches
-        parquet_files = glob.glob(os.path.join(data_dir, 'batch*.parquet'))
+        parquet_files = glob.glob(os.path.join(data_dir, 'batch*.parquet')) # Get wikiart parquet files
 
-        # Read each parquet file and concatenate them into a single DataFrame for multiclass
+        
         if not binary:
+            # Read each parquet file and concatenate them into a single DataFrame for multiclass
             self.data_frame = pd.concat(
                 [pd.read_parquet(file, filters=[[('artist', "in", [22, 16, 4, 2, 13, 17, 3, 18, 6, 15])]]) for file in
                  parquet_files], ignore_index=True)
-        # Van Gogh only
         else:
+            # Van Gogh only
             self.data_frame = pd.concat(
                 [pd.read_parquet(file, filters=[[('artist', "in", [22])]]) for file in parquet_files],
                 ignore_index=True)
-        # Remove rows with label=0 ('Unknown artist')
-        self.data_frame.drop(self.data_frame.index[self.data_frame['artist'] == 0], inplace=True)
+            
+        self.data_frame.drop(self.data_frame.index[self.data_frame['artist'] == 0], inplace=True) # Remove rows with label=0 ('Unknown artist')
 
-        # Cast to 0-10 integers label
-        self.data_frame['label'] = np.nan
-        self.data_frame['AI'] = False
+        self.data_frame['label'] = np.nan # Create label column
+        self.data_frame['AI'] = False # Create AI label column -> indicates if the forgery is AI generated ot not 
 
+        # Cast to 0-9 integer labels
         self.data_frame.loc[self.data_frame['artist'] == 22, 'label'] = 0
         if not binary:
             self.data_frame.loc[self.data_frame['artist'] == 16, 'label'] = 1
@@ -96,42 +96,35 @@ class WikiArtDataset(Dataset):
             self.data_frame.loc[self.data_frame['artist'] == 18, 'label'] = 7
             self.data_frame.loc[self.data_frame['artist'] == 6, 'label'] = 8
             self.data_frame.loc[self.data_frame['artist'] == 15, 'label'] = 9
-        print(self.data_frame.head())
-        print(len(self.data_frame))
 
-        if binary:
-            # Read in Vincent Fakes
-            for filename in os.listdir('AI/'):
+        if binary: # Get additional data for the binary dataset
+    
+            for filename in os.listdir('AI/'): # Get new data from AI folder (AI generated forgeries)
                 filepath = os.path.join('AI/', filename)
                 if os.path.isfile(filepath):
-                    # image = Image.open(filepath).convert('RGB').tobytes()
                     new_row = self.data_frame.iloc[0].copy()
                     new_row['image'] = {'path': filepath}
                     new_row['label'] = 1.0
                     new_row['AI'] = True
+                    self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True) # Concatenate new data
 
-                    self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True)
-
-            for filename in os.listdir('Forgery/'):
+            for filename in os.listdir('Forgery/'): # Get new data from Forgery folder ("real" forgeries)
                 filepath = os.path.join('Forgery/', filename)
                 if os.path.isfile(filepath):
-                    # image = Image.open(filepath).convert('RGB').tobytes()
                     new_row = self.data_frame.iloc[0].copy()
                     new_row['image'] = {'path': filepath}
                     new_row['label'] = 1.0
                     new_row['AI'] = False
-
                     self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True)
 
-        print(self.data_frame.tail())
-        print(len(self.data_frame))
-        count_forgery = self.data_frame['label'].value_counts().get(1.0, 0)
-        print(count_forgery)
-        count_real = self.data_frame['label'].value_counts().get(0.0, 0)
-        print(count_real)
-        print(f"Proportion of Forgery/AI: {count_forgery / 1996}, {count_real / 1996}")
+            # Calculate proportions
+            count_forgery = self.data_frame['label'].value_counts().get(1.0, 0)
+            count_real = self.data_frame['label'].value_counts().get(0.0, 0)
+            print(f"Proportion of Forgery/AI: {count_forgery / 1996}, {count_real / 1996}")
+        
+        print(f"Dataset_binary={self.binary} dimension: {len(self.data_frame)}")
 
-        if self.contrastive:
+        if self.contrastive: # Prepare dataframes for contrastive learning (if selected)
             self.minority_data = self.data_frame[self.data_frame['label'] == 1].reset_index(drop=True)
             self.majority_data = self.data_frame[self.data_frame['label'] == 0].reset_index(drop=True)
             self.augmentation = transforms.Compose([
@@ -144,11 +137,14 @@ class WikiArtDataset(Dataset):
         # self.data_frame.to_parquet(f'wikiart_data_batches/data_batches_filtered/van{0}.parquet')
 
     def __len__(self):
-        if self.contrastive:
-            return len(self.minority_data)  # As many batches as minority samples
+        if self.contrastive: # If contrastive is selected the lenght will be the number of samples of the minority class
+            return len(self.minority_data)
         return len(self.data_frame)
 
     def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
         if self.contrastive:
             # Get the anchor using idx
             if self.minority_data.iloc[idx]['image']['path']:
@@ -157,24 +153,22 @@ class WikiArtDataset(Dataset):
             else:
                 anchor_image_bytes = self.minority_data.iloc[idx]['image']['bytes']
                 image = Image.open(io.BytesIO(anchor_image_bytes)).convert('RGB')
-
             anchor_label = [self.minority_data.iloc[idx]['label'].astype(int)]
-            pos_idx = np.random.choice(self.minority_data.index, 1, replace=False)[0]
-            # print(pos_idx)
-            # print(self.minority_data.index)
-            # print(self.minority_data.columns)
-            # print(self.minority_data)
 
+            # First positive sample
+            pos_idx = np.random.choice(self.minority_data.index, 1, replace=False)[0] # Get 1 sample from the minority class
             positive_image = Image.open(self.minority_data.iloc[pos_idx]['image']['path']).convert('RGB') if \
             self.minority_data.iloc[pos_idx]['image']['path'] else Image.open(
                 io.BytesIO(self.minority_data.iloc[pos_idx]['image']['bytes'])).convert('RGB')
-            positive_anchor_image = self.augmentation(anchor_image)  # Positive sample (augmented anchor)
-            positive_image_pos = self.augmentation(positive_image)  # Positive sample (augmented anchor)
-            positive_label = anchor_label
+            
+            # Second positive sample (augmented anchor)
+            positive_augmented_anchor = self.augmentation(anchor_image)
 
-            # Select two random negative samples
-            negative_indices = np.random.choice(self.majority_data.index, self.contrastive_batch_size - 4,
-                                                replace=False)
+            # Third positive sample (augmented positive)
+            positive_augmented_positive = self.augmentation(positive_image) 
+
+            # Negative samples
+            negative_indices = np.random.choice(self.majority_data.index, self.contrastive_batch_size - 4, replace=False) # Select self.contrastive_batch_size - 4 random negative samples
             negative_images = [Image.open(self.majority_data.iloc[neg_idx]['image']['path']).convert('RGB') if
                                self.majority_data.iloc[neg_idx]['image']['path'] else Image.open(
                 io.BytesIO(self.majority_data.iloc[neg_idx]['image']['bytes'])).convert('RGB') for neg_idx in
@@ -183,37 +177,32 @@ class WikiArtDataset(Dataset):
 
             # Apply transformations
             anchor_image = self.transform(anchor_image)
-            positive_anchor_image = self.transform(positive_anchor_image)
+            positive_augmented_anchor = self.transform(positive_augmented_anchor)
             positive_image = self.transform(positive_image)
-            positive_image_pos = self.transform(positive_image_pos)
+            positive_augmented_positive = self.transform(positive_augmented_positive)
             negative_images = [self.transform(neg_image) for neg_image in negative_images]
 
             # Combine all samples into one batch
-            images = torch.stack([anchor_image, positive_anchor_image, positive_image, positive_image_pos] + negative_images)
-            labels = anchor_label + positive_label + positive_label + negative_labels
+            images = torch.stack([anchor_image, positive_augmented_anchor, positive_image, positive_augmented_positive] + negative_images)
+            labels = anchor_label + anchor_label + anchor_label + anchor_label + negative_labels
             return images, labels
 
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-        # For Vincent Fakes
-        if self.data_frame.iloc[idx]['image']['path']:
+        # Get the images
+        if self.data_frame.iloc[idx]['image']['path']: # For AI and Forgery images we use the path
             filepath = self.data_frame.iloc[idx]['image']['path']
             image = Image.open(filepath).convert('RGB')
-            # plt.imshow(image)
-            # plt.show()
         else:
-            # Get the image bytes in the dataframe 'image' column (dictonary with the key 'bytes')
-            image_bytes = self.data_frame.iloc[idx]['image']['bytes']
-            # Convert byte data to Image
-            image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+            image_bytes = self.data_frame.iloc[idx]['image']['bytes'] # Get the image bytes in the dataframe 'image' column (dictonary with the key 'bytes')
+            image = Image.open(io.BytesIO(image_bytes)).convert('RGB') # Convert byte data to Image
 
         # Creating label variable using the column 'label'
         label = self.data_frame.iloc[idx]['label'].astype(int)
 
+        # Creating AI (label) variable using the column 'AI' 
+        AI = self.data_frame.iloc[idx]['AI']
+
         # Apply transformations
         image = self.transform(image)
-
-        AI = self.data_frame.iloc[idx]['AI']
 
         return image, label, AI
 
