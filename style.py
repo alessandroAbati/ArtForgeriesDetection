@@ -58,14 +58,14 @@ def extract_features(data_settings, model_settings, train_settings, logger):
     if model_settings['model_type'] == 'resnet':
         raise ValueError("The style plot is not supported for 'resnet' model, please change the settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
+        model = EfficientNetModel(num_classes=model_settings['num_classes'], binary_classification=model_settings['binary']).to(device)
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
     ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
-    model_weights = ckpt['model_weights']
+    model_weights = ckpt['model_state_dict']
     model.load_state_dict(model_weights)
     print("Model's pretrained weights loaded!")
 

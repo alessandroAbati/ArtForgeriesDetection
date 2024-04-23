@@ -80,16 +80,14 @@ class EfficientNetModel(nn.Module):
 
 
 class EfficientNetModelAttention(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None,
+    def __init__(self, num_classes, efficientnet_version='efficientnet-b0',
                  binary_classification=False, contrastive_learning=False, frozen_encoder=False):
         super(EfficientNetModelAttention, self).__init__()
         self.binary_classification = binary_classification
         self.frozen_encoder = frozen_encoder
 
-        if checkpoint_path is None:
-            self.model = EfficientNet.from_pretrained(efficientnet_version)  # Load a pretrained EfficientNet model
-        else:
-            self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
+
+        self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
 
         self.model._avg_pooling = nn.Identity()
         self.model._dropout = nn.Identity()
@@ -100,10 +98,6 @@ class EfficientNetModelAttention(nn.Module):
         # self.attention = AttentionMultiHead(num_features, 512, 4)
         self.attention = SelfAttentionCNN(in_dim=1280)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        if self.frozen_encoder:
-            print("Freezing weights")
-            for param in self.model.parameters():
-                param.requires_grad = False
 
         projection_dimension = 128
         if contrastive_learning:
@@ -119,10 +113,6 @@ class EfficientNetModelAttention(nn.Module):
                 nn.ReLU(),
                 nn.Dropout(0.2),
                 nn.Linear(512, num_classes))
-
-        if checkpoint_path:
-            print("Loading checkpoint")
-            self.load_checkpoint(checkpoint_path)  # Load checkpoint file
 
     def forward(self, x):
         if self.binary_classification:
@@ -142,24 +132,6 @@ class EfficientNetModelAttention(nn.Module):
             context = context.view(context.size(0), -1)
             output = self.fc(context)
             return output
-
-    def change_class_layer(self, num_classes):
-        num_features = self.model._fc.in_features
-        self.model._fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
-
-    def load_checkpoint(self, checkpoint_path):
-        ckpt = torch.load(f"{checkpoint_path}/efficientnet.pth")
-        self.model.load_state_dict(ckpt['model_weights'])
-        print("Checkpoint retrieved!")
-
-
-# class SwinTransformerModel(nn.Module):
-#     def __init__(self, num_classes, pretrained=True, model_name='swin_tiny_patch4_window7_224'):
-#         super(SwinTransformerModel, self).__init__()
-#         self.swin_transformer = timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
-#
-#     def forward(self, x):
-#         return self.swin_transformer(x)
 
 class AttentionMultiHead(nn.Module):
 

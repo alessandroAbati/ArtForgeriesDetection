@@ -69,8 +69,7 @@ def contrastive_learning(class_train_dataset,
         raise ValueError("resnet is not supported for contrastive learning, please change the model settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'],
-                                  checkpoint_path=f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth",
-                                  binary_classification=model_settings['binary'],
+                                  binary_classification=data_settings['binary'],
                                   contrastive_learning=True).to(device)
         print("Model loaded")
     else:
@@ -162,12 +161,12 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     if model_settings['model_type'] == 'resnet':
         model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None,
+        model = EfficientNetModel(num_classes=model_settings['num_classes'],
                                   binary_classification=model_settings['binary'], frozen_encoder=frozen_encoder).to(
             device)
         print("Model loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
-        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'], checkpoint_path=None,
+        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'],
                                            binary_classification=model_settings['binary'],
                                            frozen_encoder=frozen_encoder).to(device)
         print("Model with Attention loaded")
@@ -194,6 +193,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
             if "fc" not in name:  # Exclude final fully connected layer and attention module
                 if 'attention' not in name:
                     param.data = model_weights[name]
+                    param.requires_grad = False
         print("Model's pretrained weights loaded!")
         binary_loss = True
 
