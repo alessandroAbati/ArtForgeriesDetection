@@ -122,7 +122,7 @@ class WikiArtDataset(Dataset):
             count_real = self.data_frame['label'].value_counts().get(0.0, 0)
             print(f"Proportion of Forgery/AI: {count_forgery / 1996}, {count_real / 1996}")
         
-        print(f"Dataset_binary={self.binary} dimension: {len(self.data_frame)}")
+        print(f"Dataset_binary={binary} dimension: {len(self.data_frame)}")
 
         if self.contrastive: # Prepare dataframes for contrastive learning (if selected)
             self.minority_data = self.data_frame[self.data_frame['label'] == 1].reset_index(drop=True)

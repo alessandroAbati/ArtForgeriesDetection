@@ -1,4 +1,3 @@
-# import timm
 import torch
 import torch.nn as nn
 from torchvision import models
@@ -6,20 +5,19 @@ from efficientnet_pytorch import EfficientNet
 import torch.nn.functional as F
 import math
 
-
 class ResNetModel(nn.Module):
     def __init__(self, num_classes, resnet_version='resnet18', binary_classification=False):
         super(ResNetModel, self).__init__()
         self.binary_classification = binary_classification
 
         self.model = getattr(models, resnet_version)()  # Load a pretrained ResNet model
-        torch.save(self.model.state_dict(), 'pretrain_weights/resnet_pretrain.pth')
+        #torch.save(self.model.state_dict(), 'pretrain_weights/resnet_pretrain.pth')
 
         # num_features = self.model.fc.in_features
         # print(num_features)
         # # print(list(self.model.children()))
         # self.model.fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
-        self.load_checkpoint('pretrain_weights/resnet_pretrain.pth')  # Load checkpoint file
+        self.load_checkpoint('pretrain_weights/resnet_pretrain.pth')  # Load checkpoint file (workaround for hyperion proxy problem)
 
         # Freeze layers
         for p in self.model.parameters():
@@ -46,7 +44,7 @@ class ResNetModel(nn.Module):
 
 
 class EfficientNetModel(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0', checkpoint_path=None,
+    def __init__(self, num_classes, efficientnet_version='efficientnet-b0',
                  binary_classification=False, contrastive_learning=False, frozen_encoder=False):
         super(EfficientNetModel, self).__init__()
         self.binary_classification = binary_classification
@@ -55,16 +53,9 @@ class EfficientNetModel(nn.Module):
 
         projection_dimension = 128
 
-        if checkpoint_path is None:
-            self.model = EfficientNet.from_pretrained(efficientnet_version)  # Load a pretrained EfficientNet model
-        else:
-            self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
+        self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
 
         num_features = self.model._fc.in_features
-
-        if self.frozen_encoder:
-            for param in self.model.parameters():
-                param.requires_grad = False
 
         if contrastive_learning:
             self.model._fc = nn.Sequential(
@@ -80,25 +71,12 @@ class EfficientNetModel(nn.Module):
                 nn.Linear(512, num_classes))  # Replace the classifier layer with a projection head
             # self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
 
-        if checkpoint_path:
-            print("Loading checkpoint")
-            self.load_checkpoint(checkpoint_path)  # Load checkpoint file
-
     def forward(self, x):
         if self.binary_classification:
             # print("Sigmoid")
             return torch.sigmoid(self.model(x))
         else:
             return self.model(x)
-
-    def change_class_layer(self, num_classes):
-        num_features = self.model._fc.in_features
-        self.model._fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
-
-    def load_checkpoint(self, checkpoint_path):
-        ckpt = torch.load(f"{checkpoint_path}/efficientnet.pth")
-        self.model.load_state_dict(ckpt['model_weights'])
-        print("Checkpoint retrieved!")
 
 
 class EfficientNetModelAttention(nn.Module):

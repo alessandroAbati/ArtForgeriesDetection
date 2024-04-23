@@ -1,26 +1,16 @@
 import torch
-import os
-from torch.utils.data import DataLoader, random_split
-from utils import load_config
-from models import ResNetModel, EfficientNetModel
-from dataset import WikiArtDataset
-from logger import Logger
-from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
-import wandb
-import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from torch.utils.data import DataLoader, random_split
 
-#from dataset import WikiArtDataset
+from models import EfficientNetModel
 from dataset_v2 import WikiArtDataset
+from utils import load_config
 
 torch.manual_seed(42)
-
-# os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128" # Proxy to train with hyperion
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
@@ -53,26 +43,20 @@ def plot_labels(features, true_labels, pred_labels, binary_labels, title):
         Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='False, Non-AI'),
         Line2D([0], [0], marker='x', color='red', markerfacecolor='red', markersize=10, label='False, AI-generated')
     ]
-
     fig.suptitle(f"{title}")
     axes[0].legend(handles=legend_elements, loc='best')
-
     plt.show()
 
 def extract_features(data_settings, model_settings, train_settings, logger):
     # Dataset
-    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])
     train_size = int(0.8 * len(dataset)) # 80% training set
-    train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
-    print(f"Length Train dataset: {len(train_dataset)}")
-    print(f"Length Train dataset: {len(val_dataset)}")
-
-    #train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
+    _, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
     val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)
 
     # Model
     if model_settings['model_type'] == 'resnet':
-        raise ValueError("The style plot is supported only for efficientnet, please change the settings in the config file")
+        raise ValueError("The style plot is not supported for 'resnet' model, please change the settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None, binary_classification=model_settings['binary']).to(device)
         print("Model loaded")
@@ -80,7 +64,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth", map_location=device)
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
     model_weights = ckpt['model_weights']
     model.load_state_dict(model_weights)
     print("Model's pretrained weights loaded!")
@@ -113,12 +97,10 @@ def extract_features(data_settings, model_settings, train_settings, logger):
             preds = torch.argmax(output, dim=1).cpu()
             pred_labels = np.concatenate((pred_labels, preds))
             
-
     hook_handle.remove() # Remove the hook to avoid memory leaks
 
-    # Concatenate all the batches
+    # Concatenate all the features
     features_tensor = torch.cat(extracted_features, dim=0)
-    #print(f"Extracted feat: {features_tensor.shape}\n {features_tensor}")
     features_np = features_tensor.numpy()
     binary_labels = np.array(binary_labels)
 

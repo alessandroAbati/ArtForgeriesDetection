@@ -33,24 +33,43 @@ def weighted_bce_loss(output, target, weights=None):
 
     return torch.neg(torch.mean(loss))
 
-def contrastive_learning(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger,
+def contrastive_learning(class_train_dataset, 
+                         class_val_dataset, 
+                         data_settings, 
+                         model_settings, 
+                         train_settings, 
+                         logger,
                          criterion='contloss'):
-    assert criterion in ['contloss',
-                         'gram'], f"Criterion {criterion} is not valid, please chose between 'contloss' or 'gram'"
-    # Dataset
-    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'],
+    """
+    Execute contrastive learning on the encoder (using projection head).
+    Then, execute the training of the classifier head.
+
+    :param class_train_dataset: tarining dataset for the classifier training
+    :param class_val_dataset: validation dataset for the classifier training
+    :param data_settings: data settings dictionary
+    :param model_settings: model settings dictionary
+    :param train_settings: train settings dictionary
+    :param logger: wandb logger
+    :param criterion: criterion for contrastive learing
+    """ 
+
+    assert criterion in ['contloss', 'gram'], f"Criterion {criterion} is not valid, please chose between 'contloss' or 'gram'"
+    
+    # Contrastive Learning Dataset
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], 
+                             binary=data_settings['binary'],
                              contrastive=data_settings['contrastive'],
-                             contrastive_batch_size=data_settings['contrastive_batch_size'])  # Add parameters as needed
+                             contrastive_batch_size=data_settings['contrastive_batch_size'])
     print(f"Length Train dataset: {len(dataset)}")
 
     train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     # Model
     if model_settings['model_type'] == 'resnet':
-        raise ValueError("resnet is not supported for contrastive learning, please change the model in the config file")
+        raise ValueError("resnet is not supported for contrastive learning, please change the model settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'],
-                                  checkpoint_path=None,
+                                  checkpoint_path=f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth",
                                   binary_classification=model_settings['binary'],
                                   contrastive_learning=True).to(device)
         print("Model loaded")
@@ -76,15 +95,9 @@ def contrastive_learning(train_dataset, val_dataset, data_settings, model_settin
 
         # Hook to get the features map after the last conv layer
         extracted_features = []
-
-        # for name, module in model.named_modules(): # Printing layer names:
-        #    print(name, module)
         def hook(module, input, output):
             # output is the output of the hooked layer
-            # print(f"output: {output.squeeze(..).shape}\n{output.squeeze()}")
-            # extracted_features.append(output.squeeze().detach().cpu())
-            extracted_features.append(output.clone().detach().requires_grad_(
-                True))  # This allow the gradient to be computed only for the layers before the hooked one (included)
+            extracted_features.append(output.clone().detach().requires_grad_(True))  # This allow the gradient to be computed only for the layers before the hooked one (included)
 
         # Register the hook
         hook_handle = model.model._conv_head.register_forward_hook(
@@ -128,7 +141,7 @@ def contrastive_learning(train_dataset, val_dataset, data_settings, model_settin
         hook_handle.remove()
 
     # Train the classifier with frozen encoder parameters
-    train(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=True,
+    train(class_train_dataset, class_val_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=True,
           contrastive=True)
 
 
@@ -167,15 +180,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     # Loading checkpoint
     epoch_start = 0
     binary_loss = False
-    if model_settings['continue_train']:
-        ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth",
-                          map_location=device)
-        model_weights = ckpt['model_weights']
-        model.load_state_dict(model_weights)
-        optimizer_state = ckpt['optimizer_state']
-        optimizer.load_state_dict(optimizer_state)
-        epoch_start = ckpt['epoch']
-        print("Model's pretrained weights loaded!")
     if model_settings['binary']:
         if contrastive:
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth",
@@ -223,22 +227,8 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
             ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
-            if binary_loss:
-                if contrastive:
-                    print("Saving!")
-                    # torch.save(model, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_model.pth")
-                    torch.save(ckpt,
-                               f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive.pth")
-                    # for param in model.parameters():
-                    #     print(param.data)
-                    # torch.save(model.state_dict(), f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_weights.pth")
-
-                else:
-                    torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary.pth")
-            else:
-                torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}.pth")
+            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
             min_loss = val_loss
-
 
 def train_loop(model, train_loader, criterion, optimizer, binary_loss):
     running_loss = 0.0
@@ -323,21 +313,43 @@ def main():
         project='ArtForgExpNew')
     logger = wandb_logger.get_logger()
 
+    print("\n############## DATA SETTINGS ##############")
+    print(data_settings)
+    print()
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
+    print("\n############## TRAIN SETTINGS ##############")
+    print(train_setting)
+    print()
+
+    if data_settings['binary']: model_setting['num_classes']=2 # Force binary classification if binary setting is True
+
+    # Define classification dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'],
-                             binary=data_settings['binary'])  # Add parameters as needed
+                             binary=data_settings['binary'])
     train_size = int(0.8 * len(dataset))  # 80% training set
-    train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
+    class_train_dataset, class_val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
 
-    # train(og_dataset, data_settings, model_setting, train_setting, logger)
-    train(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, frozen_encoder=False,
-          contrastive=False)
-    # train(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, frozen_encoder=True,
-    #       contrastive=True)
-    # contrastive_learning(train_dataset, val_dataset, data_settings, model_setting, train_setting, logger, criterion='contloss')
-
+    if data_settings['contrastive']:
+        assert data_settings['binary']==True, f"Only binary setting True is supported for contrastive"
+        # The classifier head will be trained automatically after the contrastive learning of the encoder
+        contrastive_learning(class_train_dataset, 
+                             class_val_dataset, 
+                             data_settings, 
+                             model_setting, 
+                             train_setting, 
+                             logger, 
+                             criterion='contloss')
+    else:
+        train(class_train_dataset, 
+              class_val_dataset, 
+              data_settings, 
+              model_setting, 
+              train_setting, 
+              logger, 
+              frozen_encoder=False,
+              contrastive=False)
 
 if __name__ == '__main__':
     main()
