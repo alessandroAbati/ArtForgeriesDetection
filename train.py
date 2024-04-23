@@ -76,7 +76,7 @@ def contrastive_learning(class_train_dataset,
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
     
     # Print Contrastive Model:
-    print(model)
+    # print(model)
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
@@ -134,7 +134,7 @@ def contrastive_learning(class_train_dataset,
         # Save checkpoint if improvement
         if avg_loss < min_loss:
             print(f'Saving model ...')
-            ckpt = {'epoch': epoch, 'model_weights': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
+            ckpt = {'epoch': epoch, 'model_weights': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_loss
     if criterion == 'gram':
@@ -182,8 +182,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
     
     # Print Training model for DEBUGGING
-    print(model)
-
     # Loading checkpoint
     epoch_start = 0
     binary_loss = False
@@ -195,13 +193,13 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
 
         model_weights = ckpt['model_weights']
 
-        if frozen_encoder:
-            for name, param in model.named_parameters():
-                print(name)
-                if "fc" not in name:  # Exclude final fully connected layer and attention module
-                    if 'attention' not in name:
-                        param.data = model_weights[name]
-                        print(param.requires_grad)
+        for name, param in model.named_parameters():
+            print(name)
+            if "fc" not in name:  # Exclude final fully connected layer and attention module
+                if 'attention' not in name:
+                    param.data = model_weights[name]
+                    if frozen_encoder:
+                        # print(param.requires_grad)
                         param.requires_grad = False
                 print(param.requires_grad)
 
@@ -245,7 +243,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         # Save checkpoint if improvement
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
-            ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
+            ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_{epoch}.pth")
             min_loss = val_loss
 

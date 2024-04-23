@@ -76,12 +76,18 @@ def extract_features(data_settings, model_settings, train_settings):
     model_weights = ckpt['model_state_dict']
     model_comp.load_state_dict(model_weights)
 
-    for (name1, param1), (name2, param2) in zip(model.named_parameters(), model_comp.named_parameters()):
-        if name1 == name2:
-            if not torch.equal(param1, param2):
-                print(f'Difference detected in layer: {name1}')
+    models_differ = 0
+    for key_item_1, key_item_2 in zip(model.state_dict().items(), model_comp.state_dict().items()):
+        if torch.equal(key_item_1[1], key_item_2[1]):
+            pass
         else:
-            print(f'Layer names do not match: {name1} vs {name2}')
+            models_differ += 1
+            if (key_item_1[0] == key_item_2[0]):
+                print('Mismatch found at', key_item_1[0])
+            else:
+                raise Exception
+    if models_differ == 0:
+        print('Models match perfectly! :)')
 
     for param in model.parameters():
         param.requires_grad = False
@@ -107,7 +113,7 @@ def extract_features(data_settings, model_settings, train_settings):
         extracted_features2.append(output.squeeze().detach().cpu())
 
     # Register the hook
-    hook_handle = model.model._avg_pooling.register_forward_hook(hook)
+    hook_handle = model.avgpool.register_forward_hook(hook)
     model.eval()
     with torch.no_grad():
         for images, labels, AI_labels in val_loader:
@@ -120,7 +126,7 @@ def extract_features(data_settings, model_settings, train_settings):
             pred_labels = np.concatenate((pred_labels, preds))
     hook_handle.remove() # Remove the hook to avoid memory leaks
 
-    hook_handle2 = model_comp.model._avg_pooling.register_forward_hook(hook2)
+    hook_handle2 = model_comp.avgpool.register_forward_hook(hook2)
     model_comp.eval()
     with torch.no_grad():
         for images, labels, AI_labels in val_loader:

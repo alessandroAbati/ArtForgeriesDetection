@@ -134,7 +134,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
 
     # Loading checkpoint
     binary_loss = False
-    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
+    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_1.pth")
     model.load_state_dict(ckpt['model_state_dict'])
     for param in model.parameters():
         param.requires_grad = False

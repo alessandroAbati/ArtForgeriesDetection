@@ -40,32 +40,46 @@ class EfficientNetModel(nn.Module):
                  binary_classification=False, contrastive_learning=False):
         super(EfficientNetModel, self).__init__()
         self.binary_classification = binary_classification
-        self.contrastive_learning = contrastive_learning
-
-        projection_dimension = 128
-
         self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
 
+        self.model._avg_pooling = nn.Identity()
+        self.model._dropout = nn.Identity()
         num_features = self.model._fc.in_features
+        print(num_features)
+        self.model._fc = nn.Identity()
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
+        projection_dimension = 128
         if contrastive_learning:
-            self.model._fc = nn.Sequential(
+            print("Contrastive Learning!")
+            self.fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
-                nn.Linear(512, projection_dimension))  # Projection head
+                nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
-            self.model._fc = nn.Sequential(
+            self.fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
-                nn.Linear(512, num_classes))  # Classifier head
+                nn.Linear(512, num_classes))
 
     def forward(self, x):
         if self.binary_classification:
-            return torch.sigmoid(self.model(x))
+            features = self.model.extract_features(x)
+            context = self.avgpool(features)
+            context = context.view(context.size(0), -1)
+            output = self.fc(context)
+            return torch.sigmoid(output)
+            # return torch.sigmoid(output)
+        #
         else:
-            return self.model(x)
+            features = self.model.extract_features(x)
+            context, weights = self.attention(features)
+            context = self.avgpool(context)
+            context = context.view(context.size(0), -1)
+            output = self.fc(context)
+            return output
 
 
 class EfficientNetModelAttention(nn.Module):
