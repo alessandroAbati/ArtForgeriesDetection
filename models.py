@@ -11,12 +11,7 @@ class ResNetModel(nn.Module):
         self.binary_classification = binary_classification
 
         self.model = getattr(models, resnet_version)()  # Load a pretrained ResNet model
-        #torch.save(self.model.state_dict(), 'pretrain_weights/resnet_pretrain.pth')
 
-        # num_features = self.model.fc.in_features
-        # print(num_features)
-        # # print(list(self.model.children()))
-        # self.model.fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
         self.load_checkpoint('pretrain_weights/resnet_pretrain.pth')  # Load checkpoint file (workaround for hyperion proxy problem)
 
         # Freeze layers
@@ -27,10 +22,7 @@ class ResNetModel(nn.Module):
                 p.requires_grad = True
 
         num_features = self.model.fc.in_features
-        # print(num_features)
-        # print(list(self.model.children()))
         self.model.fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
-        # print(list(self.model.children()))
 
     def forward(self, x):
         if self.binary_classification:

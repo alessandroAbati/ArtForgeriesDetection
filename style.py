@@ -47,7 +47,7 @@ def plot_labels(features, true_labels, pred_labels, binary_labels, title):
     axes[0].legend(handles=legend_elements, loc='best')
     plt.show()
 
-def extract_features(data_settings, model_settings, train_settings, logger):
+def extract_features(data_settings, model_settings, train_settings):
     # Dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])
     train_size = int(0.8 * len(dataset)) # 80% training set
@@ -58,7 +58,7 @@ def extract_features(data_settings, model_settings, train_settings, logger):
     if model_settings['model_type'] == 'resnet':
         raise ValueError("The style plot is not supported for 'resnet' model, please change the settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'], binary_classification=model_settings['binary']).to(device)
+        model = EfficientNetModel(num_classes=model_settings['num_classes'], binary_classification=data_settings['binary']).to(device)
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
@@ -124,18 +124,11 @@ def main():
     model_setting = config['model']
     train_setting = config['train']
 
-    """wandb_logger = Logger(
-        f"finertuning_efficentnetb0_lr=0.0001_",
-        project='ArtForg')
-    logger = wandb_logger.get_logger()
-    """
-    logger = None
-
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
     
-    extract_features(data_setting, model_setting, train_setting, logger)
+    extract_features(data_setting, model_setting, train_setting)
 
 if __name__ == '__main__':
     main()

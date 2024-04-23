@@ -123,12 +123,12 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     if model_settings['model_type'] == 'resnet':
         model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'], checkpoint_path=None,
-        binary_classification=model_settings['binary']).to(device)
+        model = EfficientNetModel(num_classes=model_settings['num_classes'],
+        binary_classification=data_settings['binary']).to(device)
         print("Model loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
-        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'], checkpoint_path=None,
-                                           binary_classification=model_settings['binary']).to(device)
+        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'],
+                                           binary_classification=data_settings['binary']).to(device)
         print("Model with Attention loaded")
         attention = True
     else:
@@ -147,7 +147,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     binary_loss = True
 
     # Loss
-    if model_settings['binary']:
+    if data_settings['binary']:
         criterion = torch.nn.BCELoss()
     else:
         criterion = torch.nn.CrossEntropyLoss()
