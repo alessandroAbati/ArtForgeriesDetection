@@ -104,7 +104,7 @@ def contrastive_learning(class_train_dataset,
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(100):
+    for epoch in range(10):
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
@@ -173,9 +173,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
-    # Optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
-
     # Loading checkpoint
     epoch_start = 0
     binary_loss = False
@@ -188,15 +185,27 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnet_fine.pth", map_location=device)
 
         model_weights = ckpt['model_weights']
+
         for name, param in model.named_parameters():
-            # print(name)
+            print(name)
             if "fc" not in name:  # Exclude final fully connected layer and attention module
                 if 'attention' not in name:
                     param.data = model_weights[name]
+                    print(param.requires_grad)
                     param.requires_grad = False
+            print(param.requires_grad)
+
         print("Model's pretrained weights loaded!")
+
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                print(name)
+
         binary_loss = True
 
+    # Optimizer
+    optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()),
+                                 lr=train_settings['learning_rate'])
     # Loss
     if data_settings['binary']:
         criterion = torch.nn.BCELoss()
@@ -227,7 +236,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
             ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state': optimizer.state_dict()}
-            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
+            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_{epoch}.pth")
             min_loss = val_loss
 
 def train_loop(model, train_loader, criterion, optimizer, binary_loss):
@@ -334,12 +343,21 @@ def main():
     if data_settings['contrastive']:
         assert data_settings['binary']==True, f"Only binary setting True is supported for contrastive"
         # The classifier head will be trained automatically after the contrastive learning of the encoder
-        contrastive_learning(class_train_dataset, 
-                             class_val_dataset, 
-                             data_settings, 
-                             model_setting, 
-                             train_setting, 
-                             logger, 
+        # train(class_train_dataset,
+        #       class_val_dataset,
+        #       data_settings,
+        #       model_setting,
+        #       train_setting,
+        #       logger,
+        #       frozen_encoder=True,
+        #       contrastive=True)
+
+        contrastive_learning(class_train_dataset,
+                             class_val_dataset,
+                             data_settings,
+                             model_setting,
+                             train_setting,
+                             logger,
                              criterion='contloss')
     else:
         train(class_train_dataset, 

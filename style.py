@@ -64,14 +64,15 @@ def extract_features(data_settings, model_settings, train_settings):
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
+    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_1.pth", map_location=device)
     model_weights = ckpt['model_state_dict']
     model.load_state_dict(model_weights)
-    print("Model's pretrained weights loaded!")
+    for param in model.parameters():
+        param.requires_grad = False
 
-    # Printing layer names:
-    #for name, module in model.named_modules():
-    #    print(name, module)
+    for name, param in model.named_parameters():
+        print(name, param)
+    print("Model's pretrained weights loaded!")
 
     extracted_features = []
     binary_labels = []
@@ -85,7 +86,6 @@ def extract_features(data_settings, model_settings, train_settings):
 
     # Register the hook
     hook_handle = model.model._avg_pooling.register_forward_hook(hook)
-
     model.eval()
     with torch.no_grad():
         for images, labels, AI_labels in val_loader:
@@ -100,6 +100,7 @@ def extract_features(data_settings, model_settings, train_settings):
     hook_handle.remove() # Remove the hook to avoid memory leaks
 
     # Concatenate all the features
+    print(extracted_features)
     features_tensor = torch.cat(extracted_features, dim=0)
     features_np = features_tensor.numpy()
     binary_labels = np.array(binary_labels)
@@ -123,6 +124,9 @@ def main():
     data_setting = config['data_settings']
     model_setting = config['model']
     train_setting = config['train']
+
+    if data_setting['binary']: model_setting['num_classes']=2 # Force binary classification if binary setting is True
+
 
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
