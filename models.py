@@ -37,11 +37,10 @@ class ResNetModel(nn.Module):
 
 class EfficientNetModel(nn.Module):
     def __init__(self, num_classes, efficientnet_version='efficientnet-b0',
-                 binary_classification=False, contrastive_learning=False, frozen_encoder=False):
+                 binary_classification=False, contrastive_learning=False):
         super(EfficientNetModel, self).__init__()
         self.binary_classification = binary_classification
         self.contrastive_learning = contrastive_learning
-        self.frozen_encoder = frozen_encoder
 
         projection_dimension = 128
 
@@ -54,18 +53,16 @@ class EfficientNetModel(nn.Module):
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
-                nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
+                nn.Linear(512, projection_dimension))  # Projection head
         else:
             self.model._fc = nn.Sequential(
                 nn.Linear(num_features, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
-                nn.Linear(512, num_classes))  # Replace the classifier layer with a projection head
-            # self.model._fc = nn.Linear(num_features, num_classes) # Replace the classifier layer
+                nn.Linear(512, num_classes))  # Classifier head
 
     def forward(self, x):
         if self.binary_classification:
-            # print("Sigmoid")
             return torch.sigmoid(self.model(x))
         else:
             return self.model(x)

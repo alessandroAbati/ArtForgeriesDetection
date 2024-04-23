@@ -74,13 +74,15 @@ def contrastive_learning(class_train_dataset,
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
+    
+    # Print Contrastive Model:
+    print(model)
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
 
     # Loading checkpoint of the first fine-tuning
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth",
-                      map_location=device)
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
     model_weights = ckpt['model_weights']
     for name, param in model.named_parameters():
         if "fc" not in name:  # Exclude final fully connected layer
@@ -104,13 +106,12 @@ def contrastive_learning(class_train_dataset,
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(10):
+    for epoch in range(1):
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
             images = images.squeeze(0)  # Squeeze to shape [contrastive_batch, img_width, img_hight]
-            labels = torch.stack(labels, dim=0).reshape(
-                len(labels))  # Reshape labels to tensor of shape [contrastive_batch]
+            labels = torch.stack(labels, dim=0).reshape(len(labels))  # Reshape labels to tensor of shape [contrastive_batch]
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(images)
@@ -146,11 +147,19 @@ def contrastive_learning(class_train_dataset,
 
 def train(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=False,
           contrastive=False):
-    # Dataset
-    # dataset = og_dataset
-    # dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'], contrastive=False)  # Add parameters as needed
-    # train_size = int(0.8 * len(dataset)) # 80% training set
-    # train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
+    """
+    Execute training of the selected model for classification tasks.
+
+    :param train_dataset: tarining dataset for the classifier training
+    :param val_dataset: validation dataset for the classifier training
+    :param data_settings: data settings dictionary
+    :param model_settings: model settings dictionary
+    :param train_settings: train settings dictionary
+    :param logger: wandb logger
+    :param frozen_encoder: bool to freze the encoder of the model
+    :param contrastive: bool to execute training after the contarstive learning
+    """
+
     print(f"Length Train dataset: {len(train_dataset)}")
     print(f"Length Val dataset: {len(val_dataset)}")
 
@@ -162,8 +171,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'],
-                                  binary_classification=data_settings['binary'], frozen_encoder=frozen_encoder).to(
-            device)
+                                  binary_classification=data_settings['binary']).to(device)
         print("Model loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
         model = EfficientNetModelAttention(num_classes=model_settings['num_classes'],
@@ -172,31 +180,34 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         print("Model with Attention loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
+    
+    # Print Training model for DEBUGGING
+    print(model)
 
     # Loading checkpoint
     epoch_start = 0
     binary_loss = False
     if data_settings['binary']:
         if contrastive:
-            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth",
-                              map_location=device)
+            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
         else:
-            # ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
-            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnet_fine.pth", map_location=device)
+            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
 
         model_weights = ckpt['model_weights']
 
-        for name, param in model.named_parameters():
-            print(name)
-            if "fc" not in name:  # Exclude final fully connected layer and attention module
-                if 'attention' not in name:
-                    param.data = model_weights[name]
-                    print(param.requires_grad)
-                    param.requires_grad = False
-            print(param.requires_grad)
+        if frozen_encoder:
+            for name, param in model.named_parameters():
+                print(name)
+                if "fc" not in name:  # Exclude final fully connected layer and attention module
+                    if 'attention' not in name:
+                        param.data = model_weights[name]
+                        print(param.requires_grad)
+                        param.requires_grad = False
+                print(param.requires_grad)
 
         print("Model's pretrained weights loaded!")
 
+        # Control of require_grad for DEBUGGING
         for name, param in model.named_parameters():
             if param.requires_grad:
                 print(name)
@@ -217,7 +228,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     for epoch in range(epoch_start, train_settings['epochs']):
         model.train()
         train_loss = train_loop(model, train_loader, criterion, optimizer, binary_loss)
-        val_loss = train_loss
         model.eval()
         val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss)
 

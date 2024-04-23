@@ -13,8 +13,6 @@ import torch.nn.functional as F
 
 from dataset_v2 import WikiArtDataset
 
-import shap
-
 torch.manual_seed(42)
 
 # os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128" # Proxy to train with hyperion
@@ -154,14 +152,12 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
-
     val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss, attention = attention)
     acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels, model_settings)
     print(f'Accuracy: {acc}, Precision: {prec},  Recall: {rec}, F1-Score: {f1_score}, Validation Loss: {val_loss:.4f}')
     f, ax = plt.subplots(figsize=(15, 10))
     sns.heatmap(conf_matrix.clone().detach().cpu().numpy(), annot=True, ax=ax)
     plt.show()
-
 
 def main():
     config = load_config()
@@ -171,7 +167,6 @@ def main():
     train_setting = config['train']
 
     if data_settings['binary']: model_setting['num_classes']=2 # Force binary classification if binary setting is True
-
 
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
