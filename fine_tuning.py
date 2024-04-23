@@ -162,12 +162,12 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'],
-                                  binary_classification=model_settings['binary'], frozen_encoder=frozen_encoder).to(
+                                  binary_classification=data_settings['binary'], frozen_encoder=frozen_encoder).to(
             device)
         print("Model loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
         model = EfficientNetModelAttention(num_classes=model_settings['num_classes'],
-                                           binary_classification=model_settings['binary'],
+                                           binary_classification=data_settings['binary'],
                                            frozen_encoder=frozen_encoder).to(device)
         print("Model with Attention loaded")
     else:
@@ -179,7 +179,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     # Loading checkpoint
     epoch_start = 0
     binary_loss = False
-    if model_settings['binary']:
+    if data_settings['binary']:
         if contrastive:
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth",
                               map_location=device)
@@ -198,7 +198,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         binary_loss = True
 
     # Loss
-    if model_settings['binary']:
+    if data_settings['binary']:
         criterion = torch.nn.BCELoss()
     else:
         criterion = torch.nn.CrossEntropyLoss()
