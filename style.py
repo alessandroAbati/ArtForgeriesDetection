@@ -59,14 +59,30 @@ def extract_features(data_settings, model_settings, train_settings):
         raise ValueError("The style plot is not supported for 'resnet' model, please change the settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel(num_classes=model_settings['num_classes'], binary_classification=data_settings['binary']).to(device)
+        model_comp = EfficientNetModel(num_classes=model_settings['num_classes'], binary_classification=data_settings['binary']).to(device)
+
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
-    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_1.pth", map_location=device)
+    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_0.pth", map_location=device)
     model_weights = ckpt['model_state_dict']
     model.load_state_dict(model_weights)
+
+    ckpt = torch.load(
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_1.pth",
+        map_location=device)
+    model_weights = ckpt['model_state_dict']
+    model_comp.load_state_dict(model_weights)
+
+    for (name1, param1), (name2, param2) in zip(model.named_parameters(), model_comp.named_parameters()):
+        if name1 == name2:
+            if not torch.equal(param1, param2):
+                print(f'Difference detected in layer: {name1}')
+        else:
+            print(f'Layer names do not match: {name1} vs {name2}')
+
     for param in model.parameters():
         param.requires_grad = False
 
@@ -75,6 +91,7 @@ def extract_features(data_settings, model_settings, train_settings):
     print("Model's pretrained weights loaded!")
 
     extracted_features = []
+    extracted_features2 = []
     binary_labels = []
     pred_labels = np.array([])
     labels_list = np.array([])
@@ -83,6 +100,11 @@ def extract_features(data_settings, model_settings, train_settings):
         # output is the output of the hooked layer
         #print(f"output: {output.squeeze().shape}\n{output.squeeze()}")
         extracted_features.append(output.squeeze().detach().cpu())
+
+    def hook2(module, input, output):
+        # output is the output of the hooked layer
+        #print(f"output: {output.squeeze().shape}\n{output.squeeze()}")
+        extracted_features2.append(output.squeeze().detach().cpu())
 
     # Register the hook
     hook_handle = model.model._avg_pooling.register_forward_hook(hook)
@@ -96,12 +118,30 @@ def extract_features(data_settings, model_settings, train_settings):
             output = model(images)  # The hook captures the features
             preds = torch.argmax(output, dim=1).cpu()
             pred_labels = np.concatenate((pred_labels, preds))
-            
     hook_handle.remove() # Remove the hook to avoid memory leaks
 
+    hook_handle2 = model_comp.model._avg_pooling.register_forward_hook(hook2)
+    model_comp.eval()
+    with torch.no_grad():
+        for images, labels, AI_labels in val_loader:
+            images = images.to(device)
+            labels_list = np.concatenate((labels_list, labels))
+            for label in AI_labels:
+                binary_labels.append(label)
+            output = model_comp(images)  # The hook captures the features
+            preds = torch.argmax(output, dim=1).cpu()
+            pred_labels = np.concatenate((pred_labels, preds))
+    hook_handle2.remove() # Remove the hook to avoid memory leaks
+
+
     # Concatenate all the features
-    print(extracted_features)
     features_tensor = torch.cat(extracted_features, dim=0)
+    features_tensor2 = torch.cat(extracted_features2, dim=0)
+
+    if torch.equal(features_tensor, features_tensor2):
+        print("The tensors are equal")
+    else:
+        print("Difference!")
     features_np = features_tensor.numpy()
     binary_labels = np.array(binary_labels)
 
