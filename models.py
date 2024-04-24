@@ -43,7 +43,7 @@ class ResNetModel(nn.Module):
 
     def forward(self, x):
         output = self.model(x) # shape: [batch_size, emb_dim=2048]
-        return output
+        return output, None
 
 
 class EfficientNetModel(nn.Module):

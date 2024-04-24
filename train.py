@@ -312,9 +312,7 @@ def main():
     logger = wandb_logger.get_logger()
 
 
-    if data_settings['binary']: 
-        assert model_setting['model_type']!='resnet', "'resnet' not su"
-        model_setting['num_classes']=2 # Force binary classification if binary setting is True
+    if data_settings['binary']: model_setting['num_classes']=2 # Force binary classification if binary setting is True
 
     print("\n############## DATA SETTINGS ##############")
     print(data_settings)

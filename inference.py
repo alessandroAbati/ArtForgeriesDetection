@@ -50,7 +50,7 @@ def visualize_attention(img, attention_map):
     plt.colorbar(im, fraction=0.046, pad=0.04) # Add colorbar as legend
     plt.show()
 
-def validate_loop(model, val_loader, criterion, binary_loss, attention = False, model_head = None):
+def validate_loop(model, model_head, val_loader, criterion, binary_loss, attention = False):
     model.eval()
     running_loss = 0.0
     all_preds = []
@@ -64,7 +64,7 @@ def validate_loop(model, val_loader, criterion, binary_loss, attention = False, 
                     visualize_attention(images, weights)
                     print(outputs)
             else:
-                outputs = model(images)
+                outputs, _ = model(images)
                 outputs = model_head(outputs)
 
             labels = labels.type(torch.LongTensor).to(device)
@@ -81,26 +81,27 @@ def validate_loop(model, val_loader, criterion, binary_loss, attention = False, 
     avg_loss = running_loss / len(val_loader)
     return avg_loss, all_preds, all_labels
 
-def inference(train_dataset, val_dataset, data_settings, model_settings, train_settings, frozen_encoder=False, contrastive=False):
+def inference(train_dataset, val_dataset, data_settings, model_settings, train_settings):
     print(f"Length Val dataset: {len(val_dataset)}")
     val_loader = DataLoader(val_dataset, 1, shuffle=False)
 
     attention = False
+
     # Model
     if model_settings['model_type'] == 'resnet':
-        model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
+        model = ResNetModel().to(device)
+        print("ResNet loaded")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
-        model_head = Head(num_classes=model_settings['num_classes'],
-                          binary_classification=data_settings['binary']).to(device)
-        print("Model loaded")
+        print("EfficientNet loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
-        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'],
-                                           binary_classification=data_settings['binary']).to(device)
-        print("Model with Attention loaded")
-        attention = True
+        model = EfficientNetModelAttention().to(device)
+        print("EfficientNet with Attention loaded")
     else:
-        raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
+        raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention'")
+
+    # Model classifier head
+    model_head = Head(encoder=model, num_classes=model_settings['num_classes'], binary_classification=data_settings['binary']).to(device)
 
     # Loading checkpoint
     binary_loss = False
@@ -118,15 +119,15 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     # model.load_state_dict(torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_weights.pth"))
 
     print("Model's pretrained weights loaded!")
-    binary_loss = True
 
     # Loss
     if data_settings['binary']:
+        binary_loss = True
         criterion = torch.nn.BCELoss()
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
-    val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss, attention = attention, model_head=model_head)
+    val_loss, val_preds, val_labels = validate_loop(model, model_head, val_loader, criterion, binary_loss, attention = attention)
     acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels, model_settings)
     print(f'Accuracy: {acc}, Precision: {prec},  Recall: {rec}, F1-Score: {f1_score}, Validation Loss: {val_loss:.4f}')
     f, ax = plt.subplots(figsize=(15, 10))
@@ -142,10 +143,17 @@ def main():
 
     if data_settings['binary']: model_setting['num_classes']=2 # Force binary classification if binary setting is True
 
+    print("\n############## DATA SETTINGS ##############")
+    print(data_settings)
+    print()
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
-    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
+    print("\n############## TRAIN SETTINGS ##############")
+    print(train_setting)
+    print()
+
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
 
