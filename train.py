@@ -91,19 +91,9 @@ def contrastive_learning(class_train_dataset,
     elif criterion == 'gram':
         criterion = GramMatrixSimilarityLoss(margin=1.0)
 
-        # Hook to get the features map after the last conv layer
-        extracted_features = []
-        def hook(module, input, output):
-            # output is the output of the hooked layer
-            extracted_features.append(output.clone().detach().requires_grad_(True))  # This allow the gradient to be computed only for the layers before the hooked one (included)
-
-        # Register the hook
-        hook_handle = model.model._conv_head.register_forward_hook(
-            hook)  # We hook the last convolutional layer that has shape [320,1280] (SxC)
-
     # Training loop
     min_loss = float('inf')
-    for epoch in range(1):
+    for epoch in range(50):
         model.train()
         model_head.train()
         running_loss = 0.0
@@ -117,13 +107,11 @@ def contrastive_learning(class_train_dataset,
             outputs = model_head(outputs)
 
             if isinstance(criterion, GramMatrixSimilarityLoss):
-                current_feature_map = extracted_features[-1]  # shape: [batch, channels, width, height]
-                flattened_feature_map = current_feature_map.reshape(4, 1280,
-                                                                    -1)  # Flatten height and width into a single dimension -> shape [batch, channels, width*height]
-                normalized_feature_map = torch.nn.functional.normalize(flattened_feature_map, p=2,
-                                                                       dim=-1)  # Normalize the feature map
+                # features shape: [batch, channels, width, height]
+                flattened_feature_map = features.reshape(data_settings['contrastive_batch_size'], 1280, -1)  # Flatten height and width into a single dimension -> shape [batch, channels, width*height]
+                normalized_feature_map = torch.nn.functional.normalize(flattened_feature_map, p=2, dim=-1)  # Normalize the feature map
                 gram_matrices = torch.bmm(normalized_feature_map,
-                                          normalized_feature_map.transpose(1, 2))  # shape [bathc, channels, channels]
+                                          normalized_feature_map.transpose(1, 2))  # shape [batch, channels, channels]
                 loss = criterion(gram_matrices)
             elif isinstance(criterion, SupContLoss):
                 loss = criterion(outputs)
@@ -362,7 +350,7 @@ def main():
                              model_setting,
                              train_setting,
                              logger,
-                             criterion='contloss')
+                             criterion='gram')
     else:
         train(class_train_dataset, 
               class_val_dataset, 
