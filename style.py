@@ -119,18 +119,6 @@ def extract_features(data_settings, model_settings, train_settings):
     pred_labels = np.array([])
     labels_list = np.array([])
 
-    def hook(module, input, output):
-        # output is the output of the hooked layer
-        #print(f"output: {output.squeeze().shape}\n{output.squeeze()}")
-        extracted_features.append(output.squeeze().detach().cpu())
-
-    def hook2(module, input, output):
-        # output is the output of the hooked layer
-        #print(f"output: {output.squeeze().shape}\n{output.squeeze()}")
-        extracted_features2.append(output.squeeze().detach().cpu())
-
-    # Register the hook
-    # hook_handle = model.avgpool.register_forward_hook(hook)
     model.eval()
     model_head.eval()
     with torch.no_grad():
@@ -139,15 +127,13 @@ def extract_features(data_settings, model_settings, train_settings):
             labels_list = np.concatenate((labels_list, labels))
             for label in AI_labels:
                 binary_labels.append(label)
-            outputs = model(images)
-            extracted_features.append(outputs.squeeze().detach().cpu())
+            outputs, _ = model(images)
+            extracted_features.append(outputs.detach().cpu())
 
             output = model_head(outputs)
             preds = torch.argmax(output, dim=1).cpu()
             pred_labels = np.concatenate((pred_labels, preds))
-    # hook_handle.remove() # Remove the hook to avoid memory leaks
 
-    # hook_handle2 = model_comp.avgpool.register_forward_hook(hook2)
     model_comp.eval()
     model_head_comp.eval()
     with torch.no_grad():
@@ -157,12 +143,10 @@ def extract_features(data_settings, model_settings, train_settings):
             for label in AI_labels:
                 binary_labels.append(label)
             outputs = model_comp(images)
-            extracted_features2.append(outputs.squeeze().detach().cpu())
+            extracted_features2.append(outputs.detach().cpu())
             output = model_head_comp(outputs)
             preds = torch.argmax(output, dim=1).cpu()
             pred_labels = np.concatenate((pred_labels, preds))
-    # hook_handle2.remove() # Remove the hook to avoid memory leaks
-
 
     # Concatenate all the features
     features_tensor = torch.cat(extracted_features, dim=0)

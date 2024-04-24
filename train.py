@@ -70,13 +70,10 @@ def contrastive_learning(class_train_dataset,
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
         model_head = Head(num_classes=model_settings['num_classes'],
-                                  binary_classification=data_settings['binary'], contrastive_learning=data_settings['contrastive']).to(device)
+                          contrastive_learning=data_settings['contrastive']).to(device)
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
-    
-    # Print Contrastive Model:
-    # print(model)
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
@@ -107,7 +104,7 @@ def contrastive_learning(class_train_dataset,
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(50):
+    for epoch in range(1):
         model.train()
         model_head.train()
         running_loss = 0.0
@@ -117,7 +114,7 @@ def contrastive_learning(class_train_dataset,
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             optimizer_head.zero_grad()
-            outputs = model(images)
+            outputs, features = model(images)
             outputs = model_head(outputs)
             if isinstance(criterion, GramMatrixSimilarityLoss):
                 current_feature_map = extracted_features[-1]  # shape: [batch, channels, width, height]
@@ -267,7 +264,7 @@ def train_loop(model, train_loader, criterion, optimizer, binary_loss, model_hea
         optimizer.zero_grad()
         if model_head:
             with torch.no_grad():
-                outputs = model(images)
+                outputs, _ = model(images)
             outputs = model_head(outputs)
         else:
             outputs = model(images)
@@ -296,7 +293,7 @@ def validate_loop(model, val_loader, criterion, binary_loss, model_head = None):
             images, labels = images.to(device), labels.to(device)
             if model_head:
                 with torch.no_grad():
-                    outputs = model(images)
+                    outputs, _ = model(images)
                 outputs = model_head(outputs)
             else:
                 outputs = model(images)

@@ -37,35 +37,66 @@ class ResNetModel(nn.Module):
 
 class EfficientNetModel(nn.Module):
     def __init__(self, efficientnet_version='efficientnet-b0'):
+        """
+            EfficientNet model (https://pytorch.org/hub/nvidia_deeplearningexamples_efficientnet/).
+
+            What we changed:
+            1. All the layers after the convolutional_head (_conv_head) had been set to Identity.
+            2. We added an AdaptiveAvgPool2d final layer to extract the features from the model.
+
+            This allow us to use the extract_features() function of the model.
+            The extract_features() function return the features map that we can use for the Gram based contrastive learning.
+            Otherwise, we pass the features map to the avgpool layer to flatten the features.      
+        """
         super(EfficientNetModel, self).__init__()
         self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
 
         self.model._avg_pooling = nn.Identity()
         self.model._dropout = nn.Identity()
-        num_features = self.model._fc.in_features
-        print(num_features)
         self.model._fc = nn.Identity()
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, x):
-        features = self.model.extract_features(x)
-        context = self.avgpool(features)
-        return context
+        """
+        Args:
+            x (torch.Tensor): batch of images with shape [batch_size, channels, width, height]
 
+        Returns:
+            context (torch.Tensor): flatten extracted features with shape [batch_size, emd_dim=1280 (efficientnet-b0)].
+            features (torch.Tensor): extracted features with shape [batch_size, emd_dim, 16, 16]
+        """
+        features = self.model.extract_features(x) # size: [batch_size, emd_dim, 16, 16]
+        context = self.avgpool(features) # size: [batch_size, emb_dim, 1, 1]
+        context = context.view(context.size(0), -1) # Flattening to shape [batch_size, emb_dim]
+        return context, features
 
 class Head(nn.Module):
-    def __init__(self, num_classes,
-                 binary_classification=False, contrastive_learning=False):
+    def __init__(self, 
+                 num_classes,
+                 binary_classification=False, 
+                 contrastive_learning=False):
+        """
+            Head model - head for the EfficientNet model.
+
+            Args:
+                num_classes (int): number of classes for the classifier head
+                binary_classification (bool, optional): control binary classification
+                contrastive_learning (bool, optional): contol contrastive learning, if True -> the projection head will be used        
+        """
         super(Head, self).__init__()
+
         self.binary_classification = binary_classification
-        projection_dimension = 128
+
         if contrastive_learning:
+            # Projection head
+            projection_dimension = 128 # Output of the projection head
             self.fc = nn.Sequential(
                 nn.Linear(1280, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
                 nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
+            # Classifier head
             self.fc = nn.Sequential(
                 nn.Linear(1280, 512),
                 nn.ReLU(),
@@ -73,13 +104,19 @@ class Head(nn.Module):
                 nn.Linear(512, num_classes))
 
     def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): output of the EfficientNet - tensor with shape [batch_size, emb_dim=1280] containing the features extracted with EfficientNet.
+
+        Returns:
+            torch.Tensor: output of the fully connected head.
+        """
         if self.binary_classification:
-            context = x.view(x.size(0), -1)
-            output = self.fc(context)
-            return torch.sigmoid(output)
+            output = torch.sigmoid(self.fc(x))
+            print(f"Head Output: {output.shape}")
+            return output
         else:
-            context = x.view(x.size(0), -1)
-            output = self.fc(context)
+            output = self.fc(x)
             return output
 
 
