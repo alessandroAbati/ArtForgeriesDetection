@@ -52,15 +52,18 @@ class GramMatrixSimilarityLoss(nn.Module):
             torch.Tensor: The contrastive loss value for the batch.
         """
         anchor_gram = gram_matrices[0]
-        positive_gram = gram_matrices[1]
 
         # Compute similarity between anchor and positive
-        positive_similarity = torch.mean((anchor_gram - positive_gram) ** 2)
+        positive_similarities = []
+        for i in range(1, 4):
+            positive_similarity = torch.mean((anchor_gram - gram_matrices[i]) ** 2)
+            positive_similarities.append(positive_similarity)
+        positive_similarity = torch.mean(torch.stack(negative_similarities))
 
         # Compute similarities between anchor and negatives
         negative_similarities = []
-        for i in range(2, gram_matrices.size(0)):
-            negative_similarity = torch.mean((anchor_gram - gram_matrices[i]) ** 2)
+        for j in range(4, gram_matrices.size(0)):
+            negative_similarity = torch.mean((anchor_gram - gram_matrices[j]) ** 2)
             negative_similarities.append(negative_similarity)
         negative_similarity = torch.mean(torch.stack(negative_similarities))
 

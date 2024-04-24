@@ -130,7 +130,6 @@ def contrastive_learning(class_train_dataset,
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_loss
 
-
     # Train the classifier with frozen encoder parameters
     train(class_train_dataset,
           class_val_dataset, 
