@@ -2,7 +2,7 @@ import torch
 import os
 from torch.utils.data import DataLoader, random_split
 from utils import load_config
-from models import ResNetModel, EfficientNetModel, EfficientNetModelAttention
+from models import ResNetModel, EfficientNetModel, EfficientNetModelAttention, Head
 from logger import Logger
 from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
 import wandb
@@ -60,7 +60,7 @@ def visualize_attention(img, attention_map):
     plt.colorbar(im, fraction=0.046, pad=0.04) # Add colorbar as legend
     plt.show()
 
-def validate_loop(model, val_loader, criterion, binary_loss, attention = False):
+def validate_loop(model, val_loader, criterion, binary_loss, attention = False, model_head = None):
     model.eval()
     running_loss = 0.0
     all_preds = []
@@ -75,6 +75,7 @@ def validate_loop(model, val_loader, criterion, binary_loss, attention = False):
                     print(outputs)
             else:
                 outputs = model(images)
+                outputs = model_head(outputs)
 
             labels = labels.type(torch.LongTensor).to(device)
             if binary_loss:
@@ -121,8 +122,9 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     if model_settings['model_type'] == 'resnet':
         model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'],
-        binary_classification=data_settings['binary']).to(device)
+        model = EfficientNetModel().to(device)
+        model_head = Head(num_classes=model_settings['num_classes'],
+                          binary_classification=data_settings['binary']).to(device)
         print("Model loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
         model = EfficientNetModelAttention(num_classes=model_settings['num_classes'],
@@ -134,10 +136,14 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
 
     # Loading checkpoint
     binary_loss = False
-    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_1.pth")
+    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_3.pth")
     model.load_state_dict(ckpt['model_state_dict'])
-    for param in model.parameters():
-        param.requires_grad = False
+
+    ckpt = torch.load(
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_head_3.pth",
+        map_location=device)
+    model_weights = ckpt['model_state_dict']
+    model_head.load_state_dict(model_weights)
     # for param in model.parameters():
     #     print(param.data)
 
@@ -152,7 +158,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
-    val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss, attention = attention)
+    val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss, attention = attention, model_head=model_head)
     acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels, model_settings)
     print(f'Accuracy: {acc}, Precision: {prec},  Recall: {rec}, F1-Score: {f1_score}, Validation Loss: {val_loss:.4f}')
     f, ax = plt.subplots(figsize=(15, 10))

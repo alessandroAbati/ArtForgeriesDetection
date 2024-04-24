@@ -2,7 +2,7 @@ import torch
 import os
 from torch.utils.data import DataLoader, random_split
 from utils import load_config
-from models import ResNetModel, EfficientNetModel, EfficientNetModelAttention
+from models import ResNetModel, EfficientNetModel, EfficientNetModelAttention, Head
 from logger import Logger
 from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
 import wandb
@@ -68,9 +68,9 @@ def contrastive_learning(class_train_dataset,
     if model_settings['model_type'] == 'resnet':
         raise ValueError("resnet is not supported for contrastive learning, please change the model settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'],
-                                  binary_classification=data_settings['binary'],
-                                  contrastive_learning=True).to(device)
+        model = EfficientNetModel().to(device)
+        model_head = Head(num_classes=model_settings['num_classes'],
+                                  binary_classification=data_settings['binary'], contrastive_learning=data_settings['contrastive']).to(device)
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
@@ -80,6 +80,7 @@ def contrastive_learning(class_train_dataset,
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
+    optimizer_head = torch.optim.Adam(model_head.parameters(), lr=train_settings['learning_rate'])
 
     # Loading checkpoint of the first fine-tuning
     ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
@@ -106,15 +107,18 @@ def contrastive_learning(class_train_dataset,
 
     # Training loop
     min_loss = float('inf')
-    for epoch in range(1):
+    for epoch in range(50):
         model.train()
+        model_head.train()
         running_loss = 0.0
         for images, labels in train_loader:
             images = images.squeeze(0)  # Squeeze to shape [contrastive_batch, img_width, img_hight]
             labels = torch.stack(labels, dim=0).reshape(len(labels))  # Reshape labels to tensor of shape [contrastive_batch]
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
+            optimizer_head.zero_grad()
             outputs = model(images)
+            outputs = model_head(outputs)
             if isinstance(criterion, GramMatrixSimilarityLoss):
                 current_feature_map = extracted_features[-1]  # shape: [batch, channels, width, height]
                 flattened_feature_map = current_feature_map.reshape(4, 1280,
@@ -128,6 +132,7 @@ def contrastive_learning(class_train_dataset,
                 loss = criterion(outputs)
             loss.backward()
             optimizer.step()
+            optimizer_head.step()
             running_loss += loss.item()
         avg_loss = running_loss / len(train_loader)
         print(f'Epoch: {epoch + 1}, Contrastive_Loss: {avg_loss:.4f}')
@@ -170,8 +175,9 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     if model_settings['model_type'] == 'resnet':
         model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'],
-                                  binary_classification=data_settings['binary']).to(device)
+        model = EfficientNetModel().to(device)
+        model_head = Head(num_classes=model_settings['num_classes'],
+                          binary_classification=data_settings['binary']).to(device)
         print("Model loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
         model = EfficientNetModelAttention(num_classes=model_settings['num_classes'],
@@ -186,35 +192,31 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     epoch_start = 0
     binary_loss = False
     if data_settings['binary']:
+        binary_loss = True
         if contrastive:
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
         else:
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
 
-        model_weights = ckpt['model_weights']
+    if contrastive:
+        model.load_state_dict(ckpt['model_weights'])
 
+    else:
+        model_weights = ckpt['model_weights']
         for name, param in model.named_parameters():
-            print(name)
             if "fc" not in name:  # Exclude final fully connected layer and attention module
                 if 'attention' not in name:
                     param.data = model_weights[name]
-                    if frozen_encoder:
-                        # print(param.requires_grad)
-                        param.requires_grad = False
-                print(param.requires_grad)
 
-        print("Model's pretrained weights loaded!")
-
-        # Control of require_grad for DEBUGGING
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                print(name)
-
-        binary_loss = True
+    print("Model's pretrained weights loaded!")
 
     # Optimizer
-    optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()),
+    if contrastive:
+        optimizer = torch.optim.Adam(model_head.parameters(),
                                  lr=train_settings['learning_rate'])
+    else:
+        optimizer = torch.optim.Adam(model.parameters(),
+                                    lr=train_settings['learning_rate'])
     # Loss
     if data_settings['binary']:
         criterion = torch.nn.BCELoss()
@@ -224,10 +226,17 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     # Training and validation loop
     min_loss = float('inf')
     for epoch in range(epoch_start, train_settings['epochs']):
-        model.train()
-        train_loss = train_loop(model, train_loader, criterion, optimizer, binary_loss)
-        model.eval()
-        val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss)
+        if contrastive:
+            model.eval()
+            model_head.train()
+            train_loss = train_loop(model, train_loader, criterion, optimizer, binary_loss, model_head)
+            model_head.eval()
+            val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss, model_head)
+        else:
+            model.train()
+            train_loss = train_loop(model, train_loader, criterion, optimizer, binary_loss)
+            model.eval()
+            val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss)
 
         # Calculate metrics
         acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels, model_settings)
@@ -245,21 +254,30 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
             ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_{epoch}.pth")
+            ckpt_head = {'epoch': epoch, 'model_state_dict': model_head.state_dict()}
+            torch.save(ckpt_head,
+                       f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_head_{epoch}.pth")
             min_loss = val_loss
 
-def train_loop(model, train_loader, criterion, optimizer, binary_loss):
+def train_loop(model, train_loader, criterion, optimizer, binary_loss, model_head = None):
+
     running_loss = 0.0
     for images, labels, AI in train_loader:
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
-        outputs = model(images)
+        if model_head:
+            with torch.no_grad():
+                outputs = model(images)
+            outputs = model_head(outputs)
+        else:
+            outputs = model(images)
         labels = labels.type(torch.LongTensor).to(device)
         if binary_loss:
             loss = criterion(outputs[:, 1], labels.float())
-            one_hot_labels = F.one_hot(labels, num_classes=2).to(device)
-            original_tensor = torch.FloatTensor([1.0, 5.0]).to(device)
-            batch_tensor = original_tensor.repeat(one_hot_labels.size(0), 1).to(device)
-            loss = weighted_bce_loss(outputs, one_hot_labels.float(), original_tensor)
+            # one_hot_labels = F.one_hot(labels, num_classes=2).to(device)
+            # original_tensor = torch.FloatTensor([1.0, 5.0]).to(device)
+            # batch_tensor = original_tensor.repeat(one_hot_labels.size(0), 1).to(device)
+            # loss = weighted_bce_loss(outputs, one_hot_labels.float(), original_tensor)
         else:
             loss = criterion(outputs, labels)
         loss.backward()
@@ -269,17 +287,21 @@ def train_loop(model, train_loader, criterion, optimizer, binary_loss):
     return avg_loss
 
 
-def validate_loop(model, val_loader, criterion, binary_loss):
-    model.eval()
+def validate_loop(model, val_loader, criterion, binary_loss, model_head = None):
     running_loss = 0.0
     all_preds = []
     all_labels = []
     with torch.no_grad():
         for images, labels, AI in val_loader:
             images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
+            if model_head:
+                with torch.no_grad():
+                    outputs = model(images)
+                outputs = model_head(outputs)
+            else:
+                outputs = model(images)
             if labels.item() == 1.0:
-                print(outputs)
+                print(f"Outputs: {outputs}")
             labels = labels.type(torch.LongTensor).to(device)
             if binary_loss:
                 loss = criterion(outputs[:, 1], labels.float())

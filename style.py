@@ -6,9 +6,10 @@ from sklearn.decomposition import PCA
 from matplotlib.lines import Line2D
 from torch.utils.data import DataLoader, random_split
 
-from models import EfficientNetModel
+from models import EfficientNetModel, Head
 from dataset_v2 import WikiArtDataset
 from utils import load_config
+
 
 torch.manual_seed(42)
 
@@ -58,8 +59,12 @@ def extract_features(data_settings, model_settings, train_settings):
     if model_settings['model_type'] == 'resnet':
         raise ValueError("The style plot is not supported for 'resnet' model, please change the settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
-        model = EfficientNetModel(num_classes=model_settings['num_classes'], binary_classification=data_settings['binary']).to(device)
-        model_comp = EfficientNetModel(num_classes=model_settings['num_classes'], binary_classification=data_settings['binary']).to(device)
+        model = EfficientNetModel().to(device)
+        model_comp = EfficientNetModel().to(device)
+        model_head = Head(num_classes=model_settings['num_classes'],
+                          binary_classification=data_settings['binary']).to(device)
+        model_head_comp = Head(num_classes=model_settings['num_classes'],
+                          binary_classification=data_settings['binary']).to(device)
 
         print("Model loaded")
     else:
@@ -71,10 +76,22 @@ def extract_features(data_settings, model_settings, train_settings):
     model.load_state_dict(model_weights)
 
     ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_1.pth",
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_0.pth",
         map_location=device)
     model_weights = ckpt['model_state_dict']
     model_comp.load_state_dict(model_weights)
+
+    ckpt = torch.load(
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_head_0.pth",
+        map_location=device)
+    model_weights = ckpt['model_state_dict']
+    model_head.load_state_dict(model_weights)
+
+    ckpt = torch.load(
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_head_0.pth",
+        map_location=device)
+    model_weights = ckpt['model_state_dict']
+    model_head_comp.load_state_dict(model_weights)
 
     models_differ = 0
     for key_item_1, key_item_2 in zip(model.state_dict().items(), model_comp.state_dict().items()):
@@ -92,8 +109,8 @@ def extract_features(data_settings, model_settings, train_settings):
     for param in model.parameters():
         param.requires_grad = False
 
-    for name, param in model.named_parameters():
-        print(name, param)
+    # for name, param in model.named_parameters():
+    #     print(name, param)
     print("Model's pretrained weights loaded!")
 
     extracted_features = []
@@ -113,37 +130,46 @@ def extract_features(data_settings, model_settings, train_settings):
         extracted_features2.append(output.squeeze().detach().cpu())
 
     # Register the hook
-    hook_handle = model.avgpool.register_forward_hook(hook)
+    # hook_handle = model.avgpool.register_forward_hook(hook)
     model.eval()
+    model_head.eval()
     with torch.no_grad():
         for images, labels, AI_labels in val_loader:
             images = images.to(device)
             labels_list = np.concatenate((labels_list, labels))
             for label in AI_labels:
                 binary_labels.append(label)
-            output = model(images)  # The hook captures the features
-            preds = torch.argmax(output, dim=1).cpu()
-            pred_labels = np.concatenate((pred_labels, preds))
-    hook_handle.remove() # Remove the hook to avoid memory leaks
+            outputs = model(images)
+            extracted_features.append(outputs.squeeze().detach().cpu())
 
-    hook_handle2 = model_comp.avgpool.register_forward_hook(hook2)
+            output = model_head(outputs)
+            preds = torch.argmax(output, dim=1).cpu()
+            pred_labels = np.concatenate((pred_labels, preds))
+    # hook_handle.remove() # Remove the hook to avoid memory leaks
+
+    # hook_handle2 = model_comp.avgpool.register_forward_hook(hook2)
     model_comp.eval()
+    model_head_comp.eval()
     with torch.no_grad():
         for images, labels, AI_labels in val_loader:
             images = images.to(device)
             labels_list = np.concatenate((labels_list, labels))
             for label in AI_labels:
                 binary_labels.append(label)
-            output = model_comp(images)  # The hook captures the features
+            outputs = model_comp(images)
+            extracted_features2.append(outputs.squeeze().detach().cpu())
+            output = model_head_comp(outputs)
             preds = torch.argmax(output, dim=1).cpu()
             pred_labels = np.concatenate((pred_labels, preds))
-    hook_handle2.remove() # Remove the hook to avoid memory leaks
+    # hook_handle2.remove() # Remove the hook to avoid memory leaks
 
 
     # Concatenate all the features
     features_tensor = torch.cat(extracted_features, dim=0)
     features_tensor2 = torch.cat(extracted_features2, dim=0)
 
+    cosine = torch.nn.CosineSimilarity()
+    print(cosine(features_tensor, features_tensor2))
     if torch.equal(features_tensor, features_tensor2):
         print("The tensors are equal")
     else:

@@ -26,7 +26,7 @@ class ResNetModel(nn.Module):
 
     def forward(self, x):
         if self.binary_classification:
-            return torch.sigmoid(self.model(x))[:, 0]
+            return torch.sigmoid(self.model(x))
         else:
             return self.model(x)
 
@@ -36,10 +36,8 @@ class ResNetModel(nn.Module):
 
 
 class EfficientNetModel(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0',
-                 binary_classification=False, contrastive_learning=False):
+    def __init__(self, efficientnet_version='efficientnet-b0'):
         super(EfficientNetModel, self).__init__()
-        self.binary_classification = binary_classification
         self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
 
         self.model._avg_pooling = nn.Identity()
@@ -49,35 +47,38 @@ class EfficientNetModel(nn.Module):
         self.model._fc = nn.Identity()
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
+    def forward(self, x):
+        features = self.model.extract_features(x)
+        context = self.avgpool(features)
+        return context
+
+
+class Head(nn.Module):
+    def __init__(self, num_classes,
+                 binary_classification=False, contrastive_learning=False):
+        super(Head, self).__init__()
+        self.binary_classification = binary_classification
         projection_dimension = 128
         if contrastive_learning:
-            print("Contrastive Learning!")
             self.fc = nn.Sequential(
-                nn.Linear(num_features, 512),
+                nn.Linear(1280, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
                 nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
             self.fc = nn.Sequential(
-                nn.Linear(num_features, 512),
+                nn.Linear(1280, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
                 nn.Linear(512, num_classes))
 
     def forward(self, x):
         if self.binary_classification:
-            features = self.model.extract_features(x)
-            context = self.avgpool(features)
-            context = context.view(context.size(0), -1)
+            context = x.view(x.size(0), -1)
             output = self.fc(context)
             return torch.sigmoid(output)
-            # return torch.sigmoid(output)
-        #
         else:
-            features = self.model.extract_features(x)
-            context, weights = self.attention(features)
-            context = self.avgpool(context)
-            context = context.view(context.size(0), -1)
+            context = x.view(x.size(0), -1)
             output = self.fc(context)
             return output
 
@@ -121,7 +122,6 @@ class EfficientNetModelAttention(nn.Module):
         if self.binary_classification:
             features = self.model.extract_features(x)
             context, weights = self.attention(features)
-            # print(context.shape)
             context = self.avgpool(context)
             context = context.view(context.size(0), -1)
             output = self.fc(context)
