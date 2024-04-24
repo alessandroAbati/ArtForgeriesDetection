@@ -142,7 +142,7 @@ def extract_features(data_settings, model_settings, train_settings):
             labels_list = np.concatenate((labels_list, labels))
             for label in AI_labels:
                 binary_labels.append(label)
-            outputs = model_comp(images)
+            outputs, _ = model_comp(images)
             extracted_features2.append(outputs.detach().cpu())
             output = model_head_comp(outputs)
             preds = torch.argmax(output, dim=1).cpu()

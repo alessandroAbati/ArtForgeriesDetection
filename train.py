@@ -1,10 +1,9 @@
 import torch
 import os
 from torch.utils.data import DataLoader, random_split
-from utils import load_config
+from utils import load_config, calculate_metrics
 from models import ResNetModel, EfficientNetModel, EfficientNetModelAttention, Head
 from logger import Logger
-from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
 import wandb
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -53,7 +52,7 @@ def contrastive_learning(class_train_dataset,
     :param criterion: criterion for contrastive learing
     """ 
 
-    assert criterion in ['contloss', 'gram'], f"Criterion {criterion} is not valid, please chose between 'contloss' or 'gram'"
+    assert criterion in ['contloss', 'gram'], f"Criterion {criterion} is not valid, please choose between 'contloss' and 'gram'"
     
     # Contrastive Learning Dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], 
@@ -116,6 +115,7 @@ def contrastive_learning(class_train_dataset,
             optimizer_head.zero_grad()
             outputs, features = model(images)
             outputs = model_head(outputs)
+
             if isinstance(criterion, GramMatrixSimilarityLoss):
                 current_feature_map = extracted_features[-1]  # shape: [batch, channels, width, height]
                 flattened_feature_map = current_feature_map.reshape(4, 1280,
@@ -127,24 +127,31 @@ def contrastive_learning(class_train_dataset,
                 loss = criterion(gram_matrices)
             elif isinstance(criterion, SupContLoss):
                 loss = criterion(outputs)
+
             loss.backward()
             optimizer.step()
             optimizer_head.step()
             running_loss += loss.item()
         avg_loss = running_loss / len(train_loader)
         print(f'Epoch: {epoch + 1}, Contrastive_Loss: {avg_loss:.4f}')
+
         # Save checkpoint if improvement
         if avg_loss < min_loss:
             print(f'Saving model ...')
             ckpt = {'epoch': epoch, 'model_weights': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_loss
-    if criterion == 'gram':
-        hook_handle.remove()
+
 
     # Train the classifier with frozen encoder parameters
-    train(class_train_dataset, class_val_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=True,
-          contrastive=True)
+    train(class_train_dataset,
+          class_val_dataset, 
+          data_settings, 
+          model_settings, 
+          train_settings, 
+          logger, 
+          frozen_encoder=True,
+          contrastive=True) 
 
 
 def train(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=False,
@@ -161,10 +168,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     :param frozen_encoder: bool to freze the encoder of the model
     :param contrastive: bool to execute training after the contarstive learning
     """
-
-    print(f"Length Train dataset: {len(train_dataset)}")
-    print(f"Length Val dataset: {len(val_dataset)}")
-
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
@@ -184,7 +187,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
     
-    # Print Training model for DEBUGGING
     # Loading checkpoint
     epoch_start = 0
     binary_loss = False
@@ -194,17 +196,14 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
         else:
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
-
     if contrastive:
         model.load_state_dict(ckpt['model_weights'])
-
     else:
         model_weights = ckpt['model_weights']
         for name, param in model.named_parameters():
             if "fc" not in name:  # Exclude final fully connected layer and attention module
                 if 'attention' not in name:
                     param.data = model_weights[name]
-
     print("Model's pretrained weights loaded!")
 
     # Optimizer
@@ -238,6 +237,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         # Calculate metrics
         acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels, model_settings)
 
+        # Logging
         print(f'Epoch: {epoch + 1}, Train_Loss: {train_loss:.4f}, Validation Loss: {val_loss:.4f}')
         logger.log({'train_loss': train_loss})
         logger.log({'validation_loss': val_loss})
@@ -246,6 +246,7 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
         sns.heatmap(conf_matrix.clone().detach().cpu().numpy(), annot=True, ax=ax)
         logger.log({"confusion_matrix": wandb.Image(f)})
         plt.close(f)
+
         # Save checkpoint if improvement
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
@@ -257,7 +258,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
             min_loss = val_loss
 
 def train_loop(model, train_loader, criterion, optimizer, binary_loss, model_head = None):
-
     running_loss = 0.0
     for images, labels, AI in train_loader:
         images, labels = images.to(device), labels.to(device)
@@ -314,29 +314,6 @@ def validate_loop(model, val_loader, criterion, binary_loss, model_head = None):
     return avg_loss, all_preds, all_labels
 
 
-def calculate_metrics(preds, labels, model_settings):
-    if model_settings['num_classes'] == 2:
-        accuracy = Accuracy(task='binary', num_classes=model_settings['num_classes']).to(device)
-        precision = Precision(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
-        recall = Recall(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
-        f1 = F1Score(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
-        confusion_matrix = ConfusionMatrix(task='binary', num_classes=model_settings['num_classes']).to(device)
-    else:
-        accuracy = Accuracy(task='multiclass', num_classes=model_settings['num_classes']).to(device)
-        precision = Precision(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-        recall = Recall(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-        f1 = F1Score(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-        confusion_matrix = ConfusionMatrix(task='multiclass', num_classes=model_settings['num_classes']).to(device)
-
-    acc = accuracy(preds, labels)
-    prec = precision(preds, labels)
-    rec = recall(preds, labels)
-    f1_score = f1(preds, labels)
-    conf_matrix = confusion_matrix(preds, labels)
-
-    return acc, prec, rec, f1_score, conf_matrix
-
-
 def main():
     config = load_config()
 
@@ -349,6 +326,8 @@ def main():
         project='ArtForgExpNew')
     logger = wandb_logger.get_logger()
 
+    if data_settings['binary']: model_setting['num_classes']=2 # Force binary classification if binary setting is True
+
     print("\n############## DATA SETTINGS ##############")
     print(data_settings)
     print()
@@ -358,8 +337,6 @@ def main():
     print("\n############## TRAIN SETTINGS ##############")
     print(train_setting)
     print()
-
-    if data_settings['binary']: model_setting['num_classes']=2 # Force binary classification if binary setting is True
 
     # Define classification dataset
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'],

@@ -113,7 +113,6 @@ class Head(nn.Module):
         """
         if self.binary_classification:
             output = torch.sigmoid(self.fc(x))
-            print(f"Head Output: {output.shape}")
             return output
         else:
             output = self.fc(x)

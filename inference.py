@@ -1,10 +1,9 @@
 import torch
 import os
 from torch.utils.data import DataLoader, random_split
-from utils import load_config
+from utils import load_config, calculate_metrics
 from models import ResNetModel, EfficientNetModel, EfficientNetModelAttention, Head
 from logger import Logger
-from torchmetrics import Accuracy, Precision, Recall, F1Score, ConfusionMatrix
 import wandb
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -19,15 +18,6 @@ torch.manual_seed(42)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-
-# def shapley(model, val_loader, criterion, binary_loss)
-
-def seed_torch(seed=42):
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
 
 def visualize_attention(img, attention_map):
     """
@@ -90,28 +80,6 @@ def validate_loop(model, val_loader, criterion, binary_loss, attention = False, 
     all_labels = torch.cat(all_labels, dim=0)
     avg_loss = running_loss / len(val_loader)
     return avg_loss, all_preds, all_labels
-
-def calculate_metrics(preds, labels, model_settings):
-    if model_settings['num_classes'] == 2:
-        accuracy = Accuracy(task='binary', num_classes=model_settings['num_classes']).to(device)
-        precision = Precision(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
-        recall = Recall(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
-        f1 = F1Score(task='binary', average='weighted', num_classes=model_settings['num_classes']).to(device)
-        confusion_matrix = ConfusionMatrix(task='binary', num_classes=model_settings['num_classes']).to(device)
-    else:
-        accuracy = Accuracy(task='multiclass', num_classes=model_settings['num_classes']).to(device)
-        precision = Precision(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-        recall = Recall(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-        f1 = F1Score(task='multiclass', average='macro', num_classes=model_settings['num_classes']).to(device)
-        confusion_matrix = ConfusionMatrix(task='multiclass', num_classes=model_settings['num_classes']).to(device)
-
-    acc = accuracy(preds, labels)
-    prec = precision(preds, labels)
-    rec = recall(preds, labels)
-    f1_score = f1(preds, labels)
-    conf_matrix = confusion_matrix(preds, labels)
-
-    return acc, prec, rec, f1_score, conf_matrix
 
 def inference(train_dataset, val_dataset, data_settings, model_settings, train_settings, frozen_encoder=False, contrastive=False):
     print(f"Length Val dataset: {len(val_dataset)}")
@@ -177,7 +145,6 @@ def main():
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
-    seed_torch()
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])  # Add parameters as needed
     train_size = int(0.8 * len(dataset)) # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
