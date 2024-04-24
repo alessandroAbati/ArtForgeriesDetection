@@ -58,7 +58,7 @@ class GramMatrixSimilarityLoss(nn.Module):
         for i in range(1, 4):
             positive_similarity = torch.mean((anchor_gram - gram_matrices[i]) ** 2)
             positive_similarities.append(positive_similarity)
-        positive_similarity = torch.mean(torch.stack(negative_similarities))
+        positive_similarity = torch.mean(torch.stack(positive_similarities))
 
         # Compute similarities between anchor and negatives
         negative_similarities = []

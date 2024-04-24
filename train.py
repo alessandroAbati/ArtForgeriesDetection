@@ -68,13 +68,16 @@ def contrastive_learning(class_train_dataset,
         raise ValueError("resnet is not supported for contrastive learning, please change the model settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
-        model_head = Head(num_classes=model_settings['num_classes'],
-                          contrastive_learning=data_settings['contrastive']).to(device)
+    elif model_settings['model_type'] == 'efficientnetAttention':
+        model = EfficientNetModelAttention().to(device)
         print("Model loaded")
     else:
-        raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
+        raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention")
+    
+    # Model projection head
+    model_head = Head(num_classes=model_settings['num_classes'], contrastive_learning=data_settings['contrastive']).to(device)
 
-    # Optimizer
+    # Optimizers
     optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
     optimizer_head = torch.optim.Adam(model_head.parameters(), lr=train_settings['learning_rate'])
 
@@ -89,6 +92,7 @@ def contrastive_learning(class_train_dataset,
     if criterion == 'contloss':
         criterion = SupContLoss(temperature=0.1)
     elif criterion == 'gram':
+        assert isinstance(model, EfficientNetModel), f"'efficientnetAttention' model is not supported for 'gram' criterion. Please change the model or the criterion."
         criterion = GramMatrixSimilarityLoss(margin=1.0)
 
     # Training loop
@@ -125,23 +129,27 @@ def contrastive_learning(class_train_dataset,
 
         # Save checkpoint if improvement
         if avg_loss < min_loss:
-            print(f'Saving model ...')
+            print('Saving model...')
             ckpt = {'epoch': epoch, 'model_weights': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_loss
 
-    # Train the classifier with frozen encoder parameters
+    # Train the classifier head
     train(class_train_dataset,
           class_val_dataset, 
           data_settings, 
           model_settings, 
           train_settings, 
-          logger, 
-          frozen_encoder=True,
+          logger,
           contrastive=True) 
 
 
-def train(train_dataset, val_dataset, data_settings, model_settings, train_settings, logger, frozen_encoder=False,
+def train(train_dataset, 
+          val_dataset, 
+          data_settings, 
+          model_settings, 
+          train_settings, 
+          logger,
           contrastive=False):
     """
     Execute training of the selected model for classification tasks.
@@ -152,7 +160,6 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
     :param model_settings: model settings dictionary
     :param train_settings: train settings dictionary
     :param logger: wandb logger
-    :param frozen_encoder: bool to freze the encoder of the model
     :param contrastive: bool to execute training after the contarstive learning
     """
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
@@ -160,46 +167,41 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
 
     # Model
     if model_settings['model_type'] == 'resnet':
-        model = ResNetModel(resnet_version='resnet101', num_classes=model_settings['num_classes']).to(device)
+        model = ResNetModel().to(device)
+        print("ResNet loaded")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
-        model_head = Head(num_classes=model_settings['num_classes'],
-                          binary_classification=data_settings['binary']).to(device)
-        print("Model loaded")
+        print("EfficientNet loaded")
     elif model_settings['model_type'] == 'efficientnetAttention':
-        model = EfficientNetModelAttention(num_classes=model_settings['num_classes'],
-                                           binary_classification=data_settings['binary'],
-                                           frozen_encoder=frozen_encoder).to(device)
-        print("Model with Attention loaded")
+        model = EfficientNetModelAttention().to(device)
+        print("EfficientNet with Attention loaded")
     else:
-        raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
-    
+        raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention'")
+
+    # Model classifier head
+    model_head = Head(encoder=model, num_classes=model_settings['num_classes'], binary_classification=data_settings['binary']).to(device)   
+
     # Loading checkpoint
-    epoch_start = 0
     binary_loss = False
     if data_settings['binary']:
         binary_loss = True
         if contrastive:
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
+            model.load_state_dict(ckpt['model_weights'])
         else:
             ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
-    if contrastive:
-        model.load_state_dict(ckpt['model_weights'])
-    else:
-        model_weights = ckpt['model_weights']
-        for name, param in model.named_parameters():
-            if "fc" not in name:  # Exclude final fully connected layer and attention module
-                if 'attention' not in name:
-                    param.data = model_weights[name]
-    print("Model's pretrained weights loaded!")
+            model_weights = ckpt['model_weights']
+            for name, param in model.named_parameters():
+                if "fc" not in name:  # Exclude final fully connected layer and attention module
+                    if 'attention' not in name:
+                        param.data = model_weights[name]
+        print("Model's pretrained weights loaded!")
 
-    # Optimizer
-    if contrastive:
-        optimizer = torch.optim.Adam(model_head.parameters(),
-                                 lr=train_settings['learning_rate'])
-    else:
-        optimizer = torch.optim.Adam(model.parameters(),
-                                    lr=train_settings['learning_rate'])
+    # Optimizers
+    if not contrastive:
+        optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
+    optimizer_head = torch.optim.Adam(model_head.parameters(), lr=train_settings['learning_rate'])
+    
     # Loss
     if data_settings['binary']:
         criterion = torch.nn.BCELoss()
@@ -208,18 +210,20 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
 
     # Training and validation loop
     min_loss = float('inf')
-    for epoch in range(epoch_start, train_settings['epochs']):
+    for epoch in range(train_settings['epochs']):
         if contrastive:
             model.eval()
             model_head.train()
-            train_loss = train_loop(model, train_loader, criterion, optimizer, binary_loss, model_head)
+            train_loss = train_loop(model, model_head, train_loader, criterion, optimizer, optimizer_head, binary_loss)
             model_head.eval()
-            val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss, model_head)
+            val_loss, val_preds, val_labels = validate_loop(model, model_head, val_loader, criterion, binary_loss)
         else:
             model.train()
-            train_loss = train_loop(model, train_loader, criterion, optimizer, binary_loss)
+            model_head.train()
+            train_loss = train_loop(model, model_head, train_loader, criterion, optimizer, optimizer_head, binary_loss)
             model.eval()
-            val_loss, val_preds, val_labels = validate_loop(model, val_loader, criterion, binary_loss)
+            model_head.eval()
+            val_loss, val_preds, val_labels = validate_loop(model, model_head, val_loader, criterion, binary_loss)
 
         # Calculate metrics
         acc, prec, rec, f1_score, conf_matrix = calculate_metrics(val_preds, val_labels, model_settings)
@@ -240,21 +244,21 @@ def train(train_dataset, val_dataset, data_settings, model_settings, train_setti
             ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_{epoch}.pth")
             ckpt_head = {'epoch': epoch, 'model_state_dict': model_head.state_dict()}
-            torch.save(ckpt_head,
-                       f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_head_{epoch}.pth")
+            torch.save(ckpt_head, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_{epoch}.pth")
             min_loss = val_loss
 
-def train_loop(model, train_loader, criterion, optimizer, binary_loss, model_head = None):
+def train_loop(model, model_head, train_loader, criterion, optimizer, optimizer_head, binary_loss):
     running_loss = 0.0
     for images, labels, AI in train_loader:
         images, labels = images.to(device), labels.to(device)
-        optimizer.zero_grad()
-        if model_head:
+        optimizer_head.zero_grad()
+        if model.training: # If model is in training mode
+            optimizer.zero_grad()
+            outputs, _ = model(images)
+        else:
             with torch.no_grad():
                 outputs, _ = model(images)
-            outputs = model_head(outputs)
-        else:
-            outputs = model(images)
+        outputs = model_head(outputs)
         labels = labels.type(torch.LongTensor).to(device)
         if binary_loss:
             loss = criterion(outputs[:, 1], labels.float())
@@ -265,27 +269,22 @@ def train_loop(model, train_loader, criterion, optimizer, binary_loss, model_hea
         else:
             loss = criterion(outputs, labels)
         loss.backward()
-        optimizer.step()
+        optimizer_head.step()
+        if model.training: optimizer.step()
         running_loss += loss.item()
     avg_loss = running_loss / len(train_loader)
     return avg_loss
 
 
-def validate_loop(model, val_loader, criterion, binary_loss, model_head = None):
+def validate_loop(model, model_head, val_loader, criterion, binary_loss):
     running_loss = 0.0
     all_preds = []
     all_labels = []
     with torch.no_grad():
         for images, labels, AI in val_loader:
             images, labels = images.to(device), labels.to(device)
-            if model_head:
-                with torch.no_grad():
-                    outputs, _ = model(images)
-                outputs = model_head(outputs)
-            else:
-                outputs = model(images)
-            if labels.item() == 1.0:
-                print(f"Outputs: {outputs}")
+            outputs, _ = model(images)
+            outputs = model_head(outputs)
             labels = labels.type(torch.LongTensor).to(device)
             if binary_loss:
                 loss = criterion(outputs[:, 1], labels.float())
@@ -300,7 +299,6 @@ def validate_loop(model, val_loader, criterion, binary_loss, model_head = None):
     avg_loss = running_loss / len(val_loader)
     return avg_loss, all_preds, all_labels
 
-
 def main():
     config = load_config()
 
@@ -313,7 +311,10 @@ def main():
         project='ArtForgExpNew')
     logger = wandb_logger.get_logger()
 
-    if data_settings['binary']: model_setting['num_classes']=2 # Force binary classification if binary setting is True
+
+    if data_settings['binary']: 
+        assert model_setting['model_type']!='resnet', "'resnet' not su"
+        model_setting['num_classes']=2 # Force binary classification if binary setting is True
 
     print("\n############## DATA SETTINGS ##############")
     print(data_settings)
@@ -334,30 +335,20 @@ def main():
     if data_settings['contrastive']:
         assert data_settings['binary']==True, f"Only binary setting True is supported for contrastive"
         # The classifier head will be trained automatically after the contrastive learning of the encoder
-        # train(class_train_dataset,
-        #       class_val_dataset,
-        #       data_settings,
-        #       model_setting,
-        #       train_setting,
-        #       logger,
-        #       frozen_encoder=True,
-        #       contrastive=True)
-
         contrastive_learning(class_train_dataset,
                              class_val_dataset,
                              data_settings,
                              model_setting,
                              train_setting,
                              logger,
-                             criterion='gram')
+                             criterion='contloss')
     else:
         train(class_train_dataset, 
               class_val_dataset, 
               data_settings, 
               model_setting, 
               train_setting, 
-              logger, 
-              frozen_encoder=False,
+              logger,
               contrastive=False)
 
 if __name__ == '__main__':

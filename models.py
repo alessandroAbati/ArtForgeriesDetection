@@ -5,7 +5,7 @@ from efficientnet_pytorch import EfficientNet
 import torch.nn.functional as F
 import math
 
-class ResNetModel(nn.Module):
+"""class ResNetModel(nn.Module):
     def __init__(self, num_classes, resnet_version='resnet18', binary_classification=False):
         super(ResNetModel, self).__init__()
         self.binary_classification = binary_classification
@@ -32,13 +32,27 @@ class ResNetModel(nn.Module):
 
     def load_checkpoint(self, checkpoint_path):
         weights = torch.load(checkpoint_path)
-        self.model.load_state_dict(weights)
+        self.model.load_state_dict(weights)"""
+
+class ResNetModel(nn.Module):
+    def __init__(self):
+        super(ResNetModel, self).__init__()
+
+        self.model = models.resnet101(pretrained=True)  # Load a pretrained ResNet model
+        self.model.fc = nn.Identity() # "Remove" fully connected layer
+
+    def forward(self, x):
+        output = self.model(x) # shape: [batch_size, emb_dim=2048]
+        return output
 
 
 class EfficientNetModel(nn.Module):
     def __init__(self, efficientnet_version='efficientnet-b0'):
         """
             EfficientNet model (https://pytorch.org/hub/nvidia_deeplearningexamples_efficientnet/).
+
+            Args:
+                efficientnet_version (string, optional): EfficientNet model version.
 
             What we changed:
             1. All the layers after the convolutional_head (_conv_head) had been set to Identity.
@@ -71,7 +85,8 @@ class EfficientNetModel(nn.Module):
         return context, features
 
 class Head(nn.Module):
-    def __init__(self, 
+    def __init__(self,
+                 encoder_model, 
                  num_classes,
                  binary_classification=False, 
                  contrastive_learning=False):
@@ -79,26 +94,31 @@ class Head(nn.Module):
             Head model - head for the EfficientNet model.
 
             Args:
+                encoder_model (callable): encoder model to get the embedding dimension (output feature vector dimesion)
                 num_classes (int): number of classes for the classifier head
                 binary_classification (bool, optional): control binary classification
                 contrastive_learning (bool, optional): contol contrastive learning, if True -> the projection head will be used        
         """
         super(Head, self).__init__()
-
         self.binary_classification = binary_classification
+        if isinstance(encoder_model, ResNetModel):
+            emb_dim = 2048
+        else:
+            # If encoder is EfficientNet
+            emb_dim = 1280   
 
         if contrastive_learning:
             # Projection head
             projection_dimension = 128 # Output of the projection head
             self.fc = nn.Sequential(
-                nn.Linear(1280, 512),
+                nn.Linear(emb_dim, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
                 nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
         else:
             # Classifier head
             self.fc = nn.Sequential(
-                nn.Linear(1280, 512),
+                nn.Linear(emb_dim, 512),
                 nn.ReLU(),
                 nn.Dropout(0.2),
                 nn.Linear(512, num_classes))
@@ -120,57 +140,47 @@ class Head(nn.Module):
 
 
 class EfficientNetModelAttention(nn.Module):
-    def __init__(self, num_classes, efficientnet_version='efficientnet-b0',
-                 binary_classification=False, contrastive_learning=False, frozen_encoder=False):
-        super(EfficientNetModelAttention, self).__init__()
-        self.binary_classification = binary_classification
-        self.frozen_encoder = frozen_encoder
+    def __init__(self, efficientnet_version='efficientnet-b0'):
+        """
+            EfficientNet model (https://pytorch.org/hub/nvidia_deeplearningexamples_efficientnet/).
 
+            Args:
+                efficientnet_version (string, optional): EfficientNet model version.
+
+            What we changed:
+            1. All the layers after the convolutional_head (_conv_head) had been set to Identity.
+            2. We added an attention layer that acts on the features map extracted from the EfficientNet.
+            3. We added an AdaptiveAvgPool2d final layer to extract the features from the model.
+
+            The attention output is passed to the avgpool layer to flatten the features.      
+        """
+        super(EfficientNetModelAttention, self).__init__()
 
         self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
 
         self.model._avg_pooling = nn.Identity()
         self.model._dropout = nn.Identity()
-        num_features = self.model._fc.in_features
-        print(num_features)
         self.model._fc = nn.Identity()
 
-        # self.attention = AttentionMultiHead(num_features, 512, 4)
+        # Attention layer
         self.attention = SelfAttentionCNN(in_dim=1280)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
-        projection_dimension = 128
-        if contrastive_learning:
-            print("Contrastive Learning!")
-            self.fc = nn.Sequential(
-                nn.Linear(num_features, 512),
-                nn.ReLU(),
-                nn.Dropout(0.2),
-                nn.Linear(512, projection_dimension))  # Replace the classifier layer with a projection head
-        else:
-            self.fc = nn.Sequential(
-                nn.Linear(num_features, 512),
-                nn.ReLU(),
-                nn.Dropout(0.2),
-                nn.Linear(512, num_classes))
+        # Avg Pooling layer
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, x):
-        if self.binary_classification:
-            features = self.model.extract_features(x)
-            context, weights = self.attention(features)
-            context = self.avgpool(context)
-            context = context.view(context.size(0), -1)
-            output = self.fc(context)
-            return torch.sigmoid(output), weights
-            # return torch.sigmoid(output)
-        #
-        else:
-            features = self.model.extract_features(x)
-            context, weights = self.attention(features)
-            context = self.avgpool(context)
-            context = context.view(context.size(0), -1)
-            output = self.fc(context)
-            return output
+        """
+        Args:
+            x (torch.Tensor): batch of images with shape [batch_size, channels, width, height]
+
+        Returns:
+            context (torch.Tensor): flatten extracted features with shape [batch_size, emd_dim=1280 (efficientnet-b0)].
+        """
+        features = self.model.extract_features(x) # size: [batch_size, emd_dim, 16, 16]
+        context, weights = self.attention(features) # context shape: [batch_size, emb_dim, 16, 16]
+        context = self.avgpool(context) # shape: [batch_size, emb_dim, 1, 1]
+        output = context.view(context.size(0), -1) # Flattening to shape [batch_size, emb_dim]
+        return output, None
 
 class AttentionMultiHead(nn.Module):
 
