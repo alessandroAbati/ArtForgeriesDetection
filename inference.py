@@ -101,7 +101,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention'")
 
     # Model classifier head
-    model_head = Head(encoder=model, num_classes=model_settings['num_classes'], binary_classification=data_settings['binary']).to(device)
+    model_head = Head(encoder_model=model, num_classes=model_settings['num_classes']).to(device)
 
     # Loading checkpoint
     binary_loss = False
@@ -123,7 +123,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     # Loss
     if data_settings['binary']:
         binary_loss = True
-        criterion = torch.nn.BCELoss()
+        criterion = torch.nn.BCEWithLogitsLoss()
     else:
         criterion = torch.nn.CrossEntropyLoss()
 

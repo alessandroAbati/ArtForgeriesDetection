@@ -87,8 +87,7 @@ class EfficientNetModel(nn.Module):
 class Head(nn.Module):
     def __init__(self,
                  encoder_model, 
-                 num_classes,
-                 binary_classification=False, 
+                 num_classes, 
                  contrastive_learning=False):
         """
             Head model - head for the EfficientNet model.
@@ -100,7 +99,6 @@ class Head(nn.Module):
                 contrastive_learning (bool, optional): contol contrastive learning, if True -> the projection head will be used        
         """
         super(Head, self).__init__()
-        self.binary_classification = binary_classification
         if isinstance(encoder_model, ResNetModel):
             emb_dim = 2048
         else:
@@ -129,14 +127,10 @@ class Head(nn.Module):
             x (torch.Tensor): output of the EfficientNet - tensor with shape [batch_size, emb_dim=1280] containing the features extracted with EfficientNet.
 
         Returns:
-            torch.Tensor: output of the fully connected head.
+            torch.Tensor: output (logits) of the fully connected head.
         """
-        if self.binary_classification:
-            output = torch.sigmoid(self.fc(x))
-            return output
-        else:
-            output = self.fc(x)
-            return output
+        output = self.fc(x)
+        return output
 
 
 class EfficientNetModelAttention(nn.Module):

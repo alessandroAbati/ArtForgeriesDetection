@@ -61,10 +61,8 @@ def extract_features(data_settings, model_settings, train_settings):
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
         model_comp = EfficientNetModel().to(device)
-        model_head = Head(num_classes=model_settings['num_classes'],
-                          binary_classification=data_settings['binary']).to(device)
-        model_head_comp = Head(num_classes=model_settings['num_classes'],
-                          binary_classification=data_settings['binary']).to(device)
+        model_head = Head(num_classes=model_settings['num_classes']).to(device)
+        model_head_comp = Head(num_classes=model_settings['num_classes']).to(device)
 
         print("Model loaded")
     else:
