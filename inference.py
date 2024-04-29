@@ -29,8 +29,12 @@ def visualize_attention(img, attention_map):
     attention_map = attention_map.squeeze(0)
     img = img.permute(1, 2, 0) # [W, H, 3]
     attention_map = attention_map.cpu().detach().numpy()
-    # attention_map = np.max(attention_map, axis=0) # Average over all heads
+    print(attention_map.shape)
     attention_map = np.mean(attention_map, axis=0) # Average over all heads
+    print(attention_map.shape)
+
+    # attention_map = np.max(attention_map, axis=0) # Average over all heads
+    # attention_map = np.mean(attention_map, axis=0) # Average over all heads
     attention_map = attention_map.reshape(int(np.sqrt(attention_map.shape[0])), int(np.sqrt(attention_map.shape[0]))) # Reshape to square shape
     attention_map = (attention_map - np.min(attention_map)) / (np.max(attention_map) - np.min(attention_map))
 
@@ -97,6 +101,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     elif model_settings['model_type'] == 'efficientnetAttention':
         model = EfficientNetModelAttention().to(device)
         print("EfficientNet with Attention loaded")
+        attention = False
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention'")
 
@@ -105,12 +110,11 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
 
     # Loading checkpoint
     binary_loss = False
-    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_3.pth")
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
     model.load_state_dict(ckpt['model_state_dict'])
 
     ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_head_3.pth",
-        map_location=device)
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
     # for param in model.parameters():

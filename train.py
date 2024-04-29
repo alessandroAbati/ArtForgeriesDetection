@@ -130,7 +130,7 @@ def contrastive_learning(class_train_dataset,
         # Save checkpoint if improvement
         if avg_loss < min_loss:
             print('Saving model...')
-            ckpt = {'epoch': epoch, 'model_weights': model.state_dict()}
+            ckpt = {'model_state_dict': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_loss
 
@@ -163,7 +163,7 @@ def train(train_dataset,
     :param contrastive: bool to execute training after the contarstive learning
     """
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)
 
     # Model
     if model_settings['model_type'] == 'resnet':
@@ -186,15 +186,13 @@ def train(train_dataset,
     if data_settings['binary']:
         binary_loss = True
         if contrastive:
-            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth", map_location=device)
-            model.load_state_dict(ckpt['model_weights'])
+            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
+            model.load_state_dict(ckpt['model_state_dict'])
         else:
-            ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
-            model_weights = ckpt['model_weights']
-            for name, param in model.named_parameters():
-                if "fc" not in name:  # Exclude final fully connected layer and attention module
-                    if 'attention' not in name:
-                        param.data = model_weights[name]
+            ckpt = torch.load(f"checkpoints/efficientnet_multiclass.pth")
+            model_weights = (ckpt['model_state_dict'])
+            model_weights = {key: value for key, value in model_weights.items() if not key.startswith('attention')}
+            model.load_state_dict(model_weights, strict=False)
         print("Model's pretrained weights loaded!")
 
     # Optimizers
@@ -242,9 +240,9 @@ def train(train_dataset,
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
             ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict()}
-            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_{epoch}.pth")
+            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
             ckpt_head = {'epoch': epoch, 'model_state_dict': model_head.state_dict()}
-            torch.save(ckpt_head, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_{epoch}.pth")
+            torch.save(ckpt_head, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
             min_loss = val_loss
 
 def train_loop(model, model_head, train_loader, criterion, optimizer, optimizer_head, binary_loss):
@@ -270,7 +268,8 @@ def train_loop(model, model_head, train_loader, criterion, optimizer, optimizer_
             loss = criterion(outputs, labels)
         loss.backward()
         optimizer_head.step()
-        if model.training: optimizer.step()
+        if model.training:
+            optimizer.step()
         running_loss += loss.item()
     avg_loss = running_loss / len(train_loader)
     return avg_loss
@@ -307,8 +306,8 @@ def main():
     train_setting = config['train']
 
     wandb_logger = Logger(
-        f"SelAttentionExp",
-        project='ArtForgExpNew')
+        f"EfficientAttentionMulticlass",
+        project='INM705_Final-Results')
     logger = wandb_logger.get_logger()
 
 

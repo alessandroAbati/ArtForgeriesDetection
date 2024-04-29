@@ -63,7 +63,8 @@ class EfficientNetModel(nn.Module):
             Otherwise, we pass the features map to the avgpool layer to flatten the features.      
         """
         super(EfficientNetModel, self).__init__()
-        self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
+        # self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
+        self.model = EfficientNet.from_pretrained(efficientnet_version)
 
         self.model._avg_pooling = nn.Identity()
         self.model._dropout = nn.Identity()
@@ -150,14 +151,16 @@ class EfficientNetModelAttention(nn.Module):
         """
         super(EfficientNetModelAttention, self).__init__()
 
-        self.model = EfficientNet.from_name(efficientnet_version)  # Load without pretrained weights
+        self.model = EfficientNet.from_pretrained(efficientnet_version)
 
         self.model._avg_pooling = nn.Identity()
         self.model._dropout = nn.Identity()
         self.model._fc = nn.Identity()
 
         # Attention layer
-        self.attention = SelfAttentionCNN(in_dim=1280)
+        # self.attention = SelfAttentionCNN(in_dim=1280)
+        self.attention = AttentionMultiHead(input_size=1280, hidden_size=1280, nr_heads=4)
+
 
         # Avg Pooling layer
         self.avgpool = nn.AdaptiveAvgPool2d(1)
@@ -174,7 +177,7 @@ class EfficientNetModelAttention(nn.Module):
         context, weights = self.attention(features) # context shape: [batch_size, emb_dim, 16, 16]
         context = self.avgpool(context) # shape: [batch_size, emb_dim, 1, 1]
         output = context.view(context.size(0), -1) # Flattening to shape [batch_size, emb_dim]
-        return output, None
+        return output, weights
 
 class AttentionMultiHead(nn.Module):
 
@@ -182,16 +185,18 @@ class AttentionMultiHead(nn.Module):
         super(AttentionMultiHead, self).__init__()
         self.hidden_size = hidden_size
         self.heads = nn.ModuleList([])
-        self.heads.extend([SelfAttention(input_size, hidden_size) for idx_head in range(nr_heads)])
+        self.heads.extend([SelfAttentionCNN(input_size) for idx_head in range(nr_heads)])
         self.linear_out = nn.Linear(nr_heads * hidden_size, input_size)
         return
 
     def forward(self, input_vector):
         all_heads = []
+        all_weights = []
         for head in self.heads:
-            out = head(input_vector)
+            out, weights = head(input_vector)
             all_heads.append(out)
-        z_out_concat = torch.cat(all_heads, dim=2)
+            all_weights.append(weights)
+        z_out_concat = torch.cat(all_heads, dim=1)
         z_out_out = F.relu(self.linear_out(z_out_concat))
         # print(z_out_out.shape)
         return z_out_out
@@ -240,8 +245,9 @@ class SelfAttentionCNN(nn.Module):
         key = self.key_conv(x).view(batch_size, -1, width * height)
         energy = torch.bmm(query, key)
         attention = F.softmax(energy, dim=-1)
+        attention_temp = torch.bmm(attention, attention.permute(0,2,1))
         value = self.value_conv(x).view(batch_size, -1, width * height)
         out = torch.bmm(value, attention.permute(0, 2, 1))
-        out = out.view(batch_size, C, width, height)
-        out = self.gamma * out + x
-        return out, attention
+        out_att = out.view(batch_size, C, width, height)
+        out = self.gamma * out_att + x
+        return out, attention_temp
