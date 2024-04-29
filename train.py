@@ -55,13 +55,19 @@ def contrastive_learning(class_train_dataset,
     assert criterion in ['contloss', 'gram'], f"Criterion {criterion} is not valid, please choose between 'contloss' and 'gram'"
     
     # Contrastive Learning Dataset
-    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], 
+    train_dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], 
                              binary=data_settings['binary'],
                              contrastive=data_settings['contrastive'],
-                             contrastive_batch_size=data_settings['contrastive_batch_size'])
-    print(f"Length Train dataset: {len(dataset)}")
-
-    train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
+                             contrastive_batch_size=data_settings['contrastive_batch_size'],
+                             index=class_train_dataset.indices)
+    val_dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], 
+                             binary=data_settings['binary'],
+                             contrastive=data_settings['contrastive'],
+                             contrastive_batch_size=data_settings['contrastive_batch_size'],
+                             index=class_val_dataset.indices)
+    
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
     # Model
     if model_settings['model_type'] == 'resnet':
@@ -98,6 +104,7 @@ def contrastive_learning(class_train_dataset,
     # Training loop
     min_loss = float('inf')
     for epoch in range(50):
+        # Training loop
         model.train()
         model_head.train()
         running_loss = 0.0
@@ -124,15 +131,43 @@ def contrastive_learning(class_train_dataset,
             optimizer.step()
             optimizer_head.step()
             running_loss += loss.item()
-        avg_loss = running_loss / len(train_loader)
-        print(f'Epoch: {epoch + 1}, Contrastive_Loss: {avg_loss:.4f}')
+        avg_train_loss = running_loss / len(train_loader)
+
+        # Validation loop
+        model.eval()
+        model_head.eval()
+        running_loss = 0.0
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images = images.squeeze(0)  # Squeeze to shape [contrastive_batch, img_width, img_hight]
+                labels = torch.stack(labels, dim=0).reshape(len(labels))  # Reshape labels to tensor of shape [contrastive_batch]
+                images, labels = images.to(device), labels.to(device)
+                outputs, features = model(images)
+                outputs = model_head(outputs)
+
+                if isinstance(criterion, GramMatrixSimilarityLoss):
+                    # features shape: [batch, channels, width, height]
+                    flattened_feature_map = features.reshape(data_settings['contrastive_batch_size'], 1280, -1)  # Flatten height and width into a single dimension -> shape [batch, channels, width*height]
+                    normalized_feature_map = torch.nn.functional.normalize(flattened_feature_map, p=2, dim=-1)  # Normalize the feature map
+                    gram_matrices = torch.bmm(normalized_feature_map,
+                                            normalized_feature_map.transpose(1, 2))  # shape [batch, channels, channels]
+                    loss = criterion(gram_matrices)
+                elif isinstance(criterion, SupContLoss):
+                    loss = criterion(outputs)
+
+                loss.backward()
+                optimizer.step()
+                optimizer_head.step()
+                running_loss += loss.item()
+            avg_val_loss = running_loss / len(train_loader)
+        print(f'Epoch: {epoch + 1}, Contrastive Train Loss: {avg_train_loss:.4f}, Contrastive Val Loss: {avg_val_loss:.4f}')
 
         # Save checkpoint if improvement
-        if avg_loss < min_loss:
+        if avg_val_loss < min_loss:
             print('Saving model...')
             ckpt = {'model_state_dict': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
-            min_loss = avg_loss
+            min_loss = avg_val_loss
 
     # Train the classifier head
     train(class_train_dataset,
@@ -164,6 +199,9 @@ def train(train_dataset,
     """
     train_loader = DataLoader(train_dataset, batch_size=train_settings['batch_size'], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=train_settings['batch_size'], shuffle=False)
+
+    print("DataLoader")
+    print(f"train idx: {train_loader._index_sampler}")
 
     # Model
     if model_settings['model_type'] == 'resnet':
@@ -324,8 +362,7 @@ def main():
     print()
 
     # Define classification dataset
-    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'],
-                             binary=data_settings['binary'])
+    dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])
     train_size = int(0.8 * len(dataset))  # 80% training set
     class_train_dataset, class_val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
 

@@ -41,7 +41,7 @@ class WikiArtDataset(Dataset):
     label_to_artist = {i + 1: artist for i, artist in enumerate(artists)}
 
     def __init__(self, data_dir, img_size=(512, 512), transform=None, binary=False, 
-                 contrastive=False, contrastive_batch_size=4):
+                 contrastive=False, contrastive_batch_size=4, index=None):
         """
         Args:
             data_dir (string): Directory with wikiart dataset files.
@@ -50,10 +50,12 @@ class WikiArtDataset(Dataset):
             binary (bool, optional): Parameter to select multiclass or binary data, default is multiclass.
             contrastive (bool, optional): Parameter to select contrastive dataset, default is false.
             contrastive_batch_size (int, optional): Batch size for the contrastive learning
+            index (list, optional): Index used in train/val split for the contrastive learning
         """
         self.contrastive = contrastive
         self.contrastive_batch_size = contrastive_batch_size
         self.img_size = img_size
+        self.index = index
 
         if transform is None:
             self.transform = transforms.Compose([
@@ -117,12 +119,19 @@ class WikiArtDataset(Dataset):
                     new_row['AI'] = False
                     self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True)
 
-            # Calculate proportions
-            count_forgery = self.data_frame['label'].value_counts().get(1.0, 0)
-            count_real = self.data_frame['label'].value_counts().get(0.0, 0)
-            print(f"Proportion of Forgery/AI: {count_forgery / 1996}, {count_real / 1996}")
+            
+
+        # Filtering the dataset based on index
+        if index:
+            self.data_frame = self.data_frame.loc[index]
         
-        print(f"Dataset_binary={binary} dimension: {len(self.data_frame)}")
+        print(f"Dataset_binary={binary}_contrastive={contrastive} dimension: {len(self.data_frame)}")
+
+        if binary:
+            # Calculate proportions
+            self.count_forgery = self.data_frame['label'].value_counts().get(1.0, 0)
+            self.count_real = self.data_frame['label'].value_counts().get(0.0, 0)
+            print(f"Proportion of Forgery/AI: {self.count_forgery / len(self.data_frame)}, {self.count_real / len(self.data_frame)}")
 
         if self.contrastive: # Prepare dataframes for contrastive learning (if selected)
             self.minority_data = self.data_frame[self.data_frame['label'] == 1].reset_index(drop=True)
@@ -132,6 +141,7 @@ class WikiArtDataset(Dataset):
                 transforms.RandomRotation(5),
                 transforms.ColorJitter(brightness=0.5),
             ])
+            print(f"Contrastive Dataset --- Minority class: {self.minority_data.shape} --- Majority class: {self.majority_data.shape}")
 
         # Creating batches
         # self.data_frame.to_parquet(f'wikiart_data_batches/data_batches_filtered/van{0}.parquet')
