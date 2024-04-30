@@ -61,32 +61,32 @@ def extract_features(data_settings, model_settings, train_settings):
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
         model_comp = EfficientNetModel().to(device)
-        model_head = Head(num_classes=model_settings['num_classes']).to(device)
-        model_head_comp = Head(num_classes=model_settings['num_classes']).to(device)
+        model_head = Head(encoder_model=model, num_classes=model_settings['num_classes'], contrastive_learning=data_settings['contrastive']).to(device)
+        model_head_comp = Head(encoder_model=model_comp, num_classes=model_settings['num_classes'], contrastive_learning=data_settings['contrastive']).to(device)
 
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
-    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_0.pth", map_location=device)
+    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth", map_location=device)
     model_weights = ckpt['model_state_dict']
     model.load_state_dict(model_weights)
 
     ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_0.pth",
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth",
         map_location=device)
     model_weights = ckpt['model_state_dict']
     model_comp.load_state_dict(model_weights)
 
     ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_head_0.pth",
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth",
         map_location=device)
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
 
     ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}_head_0.pth",
+        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth",
         map_location=device)
     model_weights = ckpt['model_state_dict']
     model_head_comp.load_state_dict(model_weights)

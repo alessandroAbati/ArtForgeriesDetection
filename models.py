@@ -158,8 +158,8 @@ class EfficientNetModelAttention(nn.Module):
         self.model._fc = nn.Identity()
 
         # Attention layer
-        # self.attention = SelfAttentionCNN(in_dim=1280)
-        self.attention = AttentionMultiHead(input_size=1280, hidden_size=1280, nr_heads=4)
+        self.attention = SelfAttentionCNN(in_dim=1280)
+        # self.attention = AttentionMultiHead(input_size=1280, hidden_size=1280, nr_heads=4)
 
 
         # Avg Pooling layer
@@ -186,7 +186,7 @@ class AttentionMultiHead(nn.Module):
         self.hidden_size = hidden_size
         self.heads = nn.ModuleList([])
         self.heads.extend([SelfAttentionCNN(input_size) for idx_head in range(nr_heads)])
-        self.linear_out = nn.Linear(nr_heads * hidden_size, input_size)
+        self.conv_out = nn.Conv2d(in_channels=input_size*nr_heads, out_channels=input_size, kernel_size=1)
         return
 
     def forward(self, input_vector):
@@ -197,9 +197,10 @@ class AttentionMultiHead(nn.Module):
             all_heads.append(out)
             all_weights.append(weights)
         z_out_concat = torch.cat(all_heads, dim=1)
-        z_out_out = F.relu(self.linear_out(z_out_concat))
+        weight_mean = torch.mean(torch.stack(all_weights), dim=0)
+        z_out_out = F.relu(self.conv_out(z_out_concat))
         # print(z_out_out.shape)
-        return z_out_out
+        return z_out_out, weight_mean
 
 
 class SelfAttention(nn.Module):
@@ -251,3 +252,28 @@ class SelfAttentionCNN(nn.Module):
         out_att = out.view(batch_size, C, width, height)
         out = self.gamma * out_att + x
         return out, attention_temp
+
+class MultiHeadSelfAttentionCNN(nn.Module):
+    def __init__(self, in_dim, num_heads=8):
+        super(MultiHeadSelfAttentionCNN, self).__init__()
+        self.num_heads = num_heads
+        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // num_heads, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // num_heads, kernel_size=1)
+        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+    def forward(self, x):
+        batch_size, C, width, height = x.size()
+        print(x.shape)
+        query = self.query_conv(x).view(batch_size, self.num_heads, -1, width * height).permute(0, 1, 3, 2)
+        key = self.key_conv(x).view(batch_size, self.num_heads, -1, width * height)
+        print(query.shape)
+        print(key.shape)
+        energy = torch.matmul(query, key.permute(0, 1, 3, 2))
+        attention = F.softmax(energy, dim=-1)
+        attention_temp = torch.bmm(attention, attention.permute(0, 1, 3, 2))
+        value = self.value_conv(x).view(batch_size, -1, width * height)
+        out = torch.matmul(attention.permute(0, 1, 3, 2), value)
+        out_att = out.view(batch_size, C, width, height)
+        out = self.gamma * out_att + x
+        return out, attention

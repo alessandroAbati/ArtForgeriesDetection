@@ -88,8 +88,8 @@ def contrastive_learning(class_train_dataset,
     optimizer_head = torch.optim.Adam(model_head.parameters(), lr=train_settings['learning_rate'])
 
     # Loading checkpoint of the first fine-tuning
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_fine.pth", map_location=device)
-    model_weights = ckpt['model_weights']
+    ckpt = torch.load(f"checkpoints/efficientnet_multiclass.pth", map_location=device)
+    model_weights = ckpt['model_state_dict']
     for name, param in model.named_parameters():
         if "fc" not in name:  # Exclude final fully connected layer
             param.data = model_weights[name]
@@ -154,12 +154,8 @@ def contrastive_learning(class_train_dataset,
                     loss = criterion(gram_matrices)
                 elif isinstance(criterion, SupContLoss):
                     loss = criterion(outputs)
-
-                loss.backward()
-                optimizer.step()
-                optimizer_head.step()
                 running_loss += loss.item()
-            avg_val_loss = running_loss / len(train_loader)
+            avg_val_loss = running_loss / len(val_loader)
         print(f'Epoch: {epoch + 1}, Contrastive Train Loss: {avg_train_loss:.4f}, Contrastive Val Loss: {avg_val_loss:.4f}')
 
         # Save checkpoint if improvement
@@ -234,13 +230,16 @@ def train(train_dataset,
         print("Model's pretrained weights loaded!")
 
     # Optimizers
+    optimizer = 0
     if not contrastive:
         optimizer = torch.optim.Adam(model.parameters(), lr=train_settings['learning_rate'])
     optimizer_head = torch.optim.Adam(model_head.parameters(), lr=train_settings['learning_rate'])
     
     # Loss
     if data_settings['binary']:
-        criterion = torch.nn.BCEWithLogitsLoss() # Sigmoid is implemented in the loss
+        # criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([10]).to(device)) # Sigmoid is implemented in the loss # 24.53
+        criterion = torch.nn.BCEWithLogitsLoss() # Sigmoid is implemented in the loss # 24.53
+
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
@@ -278,9 +277,9 @@ def train(train_dataset,
         if val_loss < min_loss:
             print(f'Loss decreased ({min_loss:.4f} --> {val_loss:.4f}). Saving model ...')
             ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict()}
-            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
+            torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
             ckpt_head = {'epoch': epoch, 'model_state_dict': model_head.state_dict()}
-            torch.save(ckpt_head, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
+            torch.save(ckpt_head, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
             min_loss = val_loss
 
 def train_loop(model, model_head, train_loader, criterion, optimizer, optimizer_head, binary_loss):
@@ -344,7 +343,7 @@ def main():
     train_setting = config['train']
 
     wandb_logger = Logger(
-        f"EfficientAttentionMulticlass",
+        f"EfficientAttentionSingleHead",
         project='INM705_Final-Results')
     logger = wandb_logger.get_logger()
 
@@ -368,14 +367,22 @@ def main():
 
     if data_settings['contrastive']:
         assert data_settings['binary']==True, f"Only binary setting True is supported for contrastive"
+        train(class_train_dataset,
+              class_val_dataset,
+              data_settings,
+              model_setting,
+              train_setting,
+              logger,
+              contrastive=True)
+
         # The classifier head will be trained automatically after the contrastive learning of the encoder
-        contrastive_learning(class_train_dataset,
-                             class_val_dataset,
-                             data_settings,
-                             model_setting,
-                             train_setting,
-                             logger,
-                             criterion='contloss')
+        # contrastive_learning(class_train_dataset,
+        #                      class_val_dataset,
+        #                      data_settings,
+        #                      model_setting,
+        #                      train_setting,
+        #                      logger,
+        #                      criterion='contloss')
     else:
         train(class_train_dataset, 
               class_val_dataset, 
