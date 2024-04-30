@@ -2,7 +2,7 @@ data_settings:
     dataset_path: 'wikiart_data_batches/data_batches_filtered'
     binary: True
     contrastive: True
-    contrastive_batch_size: 10 # The batch will always be formed by 1 anchor, 3 positives, (batch_size-4) negatives
+    contrastive_batch_size: 24 # The batch will always be formed by 1 anchor, 3 positives, (batch_size-4) negatives
 model:
     model_type: 'efficientnet' # resnet or efficientnet or efficientnetAttention
     num_classes:  2 # If data_settings[binary] is True, number of classes will be always 2

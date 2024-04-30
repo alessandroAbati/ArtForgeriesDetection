@@ -61,8 +61,8 @@ def extract_features(data_settings, model_settings, train_settings):
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
         model_comp = EfficientNetModel().to(device)
-        model_head = Head(encoder_model=model, num_classes=model_settings['num_classes'], contrastive_learning=data_settings['contrastive']).to(device)
-        model_head_comp = Head(encoder_model=model_comp, num_classes=model_settings['num_classes'], contrastive_learning=data_settings['contrastive']).to(device)
+        model_head = Head(encoder_model=model, num_classes=model_settings['num_classes']).to(device)
+        model_head_comp = Head(encoder_model=model_comp, num_classes=model_settings['num_classes']).to(device)
 
         print("Model loaded")
     else:

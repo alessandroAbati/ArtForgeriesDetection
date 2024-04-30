@@ -58,12 +58,21 @@ class WikiArtDataset(Dataset):
         self.index = index
 
         if transform is None:
-            self.transform = transforms.Compose([
-                transforms.Resize(self.img_size),
-                transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(5),
-                transforms.ToTensor(),
-            ])
+            if contrastive:
+                self.transform = transforms.Compose([
+                        transforms.Resize(self.img_size),
+                        transforms.RandomCrop(320, 320),
+                        transforms.RandomHorizontalFlip(),
+                        transforms.RandomRotation(5),
+                        transforms.ToTensor(),
+                    ])
+            else:
+                self.transform = transforms.Compose([
+                    transforms.Resize(self.img_size),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.RandomRotation(5),
+                    transforms.ToTensor(),
+                ])
         else:
             self.transform = transform
 

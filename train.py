@@ -90,9 +90,7 @@ def contrastive_learning(class_train_dataset,
     # Loading checkpoint of the first fine-tuning
     ckpt = torch.load(f"checkpoints/efficientnet_multiclass.pth", map_location=device)
     model_weights = ckpt['model_state_dict']
-    for name, param in model.named_parameters():
-        if "fc" not in name:  # Exclude final fully connected layer
-            param.data = model_weights[name]
+    model.load_state_dict(model_weights)
 
     # Contrastive Loss
     if criterion == 'contloss':
@@ -164,6 +162,9 @@ def contrastive_learning(class_train_dataset,
             ckpt = {'model_state_dict': model.state_dict()}
             torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive.pth")
             min_loss = avg_val_loss
+
+    ckpt = {'model_state_dict': model.state_dict()}
+    torch.save(ckpt, f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_contrastive_final.pth")
 
     # Train the classifier head
     train(class_train_dataset,
@@ -343,7 +344,7 @@ def main():
     train_setting = config['train']
 
     wandb_logger = Logger(
-        f"EfficientAttentionSingleHead",
+        f"EfficientContrastive",
         project='INM705_Final-Results')
     logger = wandb_logger.get_logger()
 
@@ -367,22 +368,15 @@ def main():
 
     if data_settings['contrastive']:
         assert data_settings['binary']==True, f"Only binary setting True is supported for contrastive"
-        train(class_train_dataset,
-              class_val_dataset,
-              data_settings,
-              model_setting,
-              train_setting,
-              logger,
-              contrastive=True)
 
         # The classifier head will be trained automatically after the contrastive learning of the encoder
-        # contrastive_learning(class_train_dataset,
-        #                      class_val_dataset,
-        #                      data_settings,
-        #                      model_setting,
-        #                      train_setting,
-        #                      logger,
-        #                      criterion='contloss')
+        contrastive_learning(class_train_dataset,
+                             class_val_dataset,
+                             data_settings,
+                             model_setting,
+                             train_setting,
+                             logger,
+                             criterion='contloss')
     else:
         train(class_train_dataset, 
               class_val_dataset, 
