@@ -170,3 +170,4 @@ cython_debug/
 ##.idea/
 #/Vincent_Fakes/
 #/checkpoints/
+/checkpoints/
