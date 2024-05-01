@@ -113,6 +113,7 @@ def contrastive_learning(class_train_dataset,
             optimizer.zero_grad()
             optimizer_head.zero_grad()
             outputs, features = model(images)
+            outputs = torch.nn.functional.normalize(outputs, p=2, dim=-1)  # Normalize the feature map
             outputs = model_head(outputs)
 
             if isinstance(criterion, GramMatrixSimilarityLoss):
@@ -141,6 +142,7 @@ def contrastive_learning(class_train_dataset,
                 labels = torch.stack(labels, dim=0).reshape(len(labels))  # Reshape labels to tensor of shape [contrastive_batch]
                 images, labels = images.to(device), labels.to(device)
                 outputs, features = model(images)
+                outputs = torch.nn.functional.normalize(outputs, p=2, dim=-1)  # Normalize the feature map
                 outputs = model_head(outputs)
 
                 if isinstance(criterion, GramMatrixSimilarityLoss):
