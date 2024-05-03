@@ -82,8 +82,8 @@ class WikiArtDataset(Dataset):
 
         if test:
             self.data_frame = pd.DataFrame({'image': [None], 'label': [None], 'AI': [None]})
-            for filename in os.listdir('test/fake'): # Get new data from test/fake folder
-                filepath = os.path.join('test/fake', filename)
+            for filename in os.listdir(os.path.join('test', 'fake')): # Get new data from test/fake folder
+                filepath = os.path.join('test', 'fake', filename)
                 if os.path.isfile(filepath):
                     new_row = self.data_frame.iloc[0].copy()
                     new_row['image'] = {'path': filepath}
@@ -94,15 +94,15 @@ class WikiArtDataset(Dataset):
                         new_row['AI'] = False
                     self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True) # Concatenate new data
 
-            for filename in os.listdir('test/real'): # Get new data from Forgery folder ("real" forgeries)
-                filepath = os.path.join('test/real', filename)
+            for filename in os.listdir(os.path.join('test', 'real')): # Get new data from Forgery folder ("real" forgeries)
+                filepath = os.path.join('test', 'real', filename)
                 if os.path.isfile(filepath):
                     new_row = self.data_frame.iloc[0].copy()
                     new_row['image'] = {'path': filepath}
                     new_row['label'] = 0.0
                     new_row['AI'] = False
                     self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True)
-            self.data_frame.drop(index=0)
+            self.data_frame.drop(index=0, inplace=True)
             self.data_frame.reset_index(drop=True)
             print(f"Test dataset: {self.data_frame.shape}\n{self.data_frame}")
             return
