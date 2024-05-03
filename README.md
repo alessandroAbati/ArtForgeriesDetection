@@ -114,11 +114,14 @@ To replicate the environment and run the code follow these steps:
         The checkpoint files for the encoder has the format: '<model_name>\_<binary/multiclass>\_', while the checkpoint files for the head has the format: '<model_name>\_head\_<binary/multiclass>\_'
         * Note: the checkpoints between the encoder and the head MUST be consistent.
 
-    - Visualisation of attention settings
+    - Visualisation of attention settings:
+      
+      By default, the attention matrix/weights are visualized. If the outputs of the attention model want to be visualized, change in 'models.py', in line 279, 'attention' variable for 'output'.
+      Additionally, the line 114 in 'inference.py' must be set as 'attention=True' if attentions want to be plotted. Otherwise set this variable as False.
 
-    - Visualise the results:
+  - Visualise the results:
 
-        Run:
-        ```bash
-        python3 style.py
-        ```
+      Run:
+      ```bash
+      python3 style.py
+      ```

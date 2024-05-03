@@ -273,7 +273,7 @@ class MultiHeadSelfAttentionCNN(nn.Module):
         attention = F.softmax(energy, dim=-1)
         attention_temp = torch.bmm(attention, attention.permute(0, 1, 3, 2))
         value = self.value_conv(x).view(batch_size, -1, width * height)
-        out = torch.matmul(attention.permute(0, 1, 3, 2), value)
-        out_att = out.view(batch_size, C, width, height)
+        output = torch.matmul(attention.permute(0, 1, 3, 2), value)
+        out_att = output.view(batch_size, C, width, height)
         out = self.gamma * out_att + x
         return out, attention
