@@ -6,7 +6,7 @@ from sklearn.decomposition import PCA
 from matplotlib.lines import Line2D
 from torch.utils.data import DataLoader, random_split
 
-from models import EfficientNetModel, Head
+from models import EfficientNetModel, Head, EfficientNetModelAttention
 from dataset_v2 import WikiArtDataset
 from utils import load_config
 
@@ -61,18 +61,20 @@ def extract_features(data_settings, model_settings, train_settings):
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
         model_head = Head(encoder_model=model, num_classes=model_settings['num_classes']).to(device)
-
+    elif model_settings['model_type'] == 'efficientnetAttention':
+        model = EfficientNetModelAttention().to(device)
+        model_head = Head(encoder_model=model, num_classes=model_settings['num_classes']).to(device)
         print("Model loaded")
     else:
-        raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
+        raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention'")
 
     # Loading checkpoint Encoder    
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnet_binary_contrastive_gram.pth", map_location=device) # Change the checkpoint file to run different experiments
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_binary_multihead_4.pth", map_location=device) # Change the checkpoint file to run different experiments
     model_weights = ckpt['model_state_dict']
     model.load_state_dict(model_weights)
 
     # Loading checkpoint Head
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnet_head_binary_contrastive_gram.pth", map_location=device) # Change the checkpoint file to run different experiments
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_head_binary_multihead_4.pth", map_location=device) # Change the checkpoint file to run different experiments
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
 

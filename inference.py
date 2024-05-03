@@ -111,7 +111,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     elif model_settings['model_type'] == 'efficientnetAttention':
         model = EfficientNetModelAttention().to(device)
         print("EfficientNet with Attention loaded")
-        attention = True
+        attention = False
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention'")
 
@@ -120,11 +120,11 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
 
     # Loading checkpoint Encoder
     binary_loss = False
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_binary_singlehead.pth")
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_binary_contrastive_multihead_4.pth")
     model.load_state_dict(ckpt['model_state_dict'])
 
     # Loading checkpoint Head
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_head_binary_singlehead.pth")
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_head_binary_contrastive_multihead_4.pth")
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
 
@@ -166,7 +166,7 @@ def main():
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])
     train_size = int(0.8 * len(dataset))  # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
-    plot_errors = True
+    plot_errors = False
     inference(train_dataset, val_dataset, data_settings, model_setting, train_setting, plot_errors)
 
 
