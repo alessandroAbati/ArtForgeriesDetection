@@ -66,14 +66,13 @@ def extract_features(data_settings, model_settings, train_settings):
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
-    # Loading checkpoint
-    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/efficientnet_binary_contrastive_gram.pth", map_location=device)
+    # Loading checkpoint Encoder    
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnet_binary_contrastive_gram.pth", map_location=device) # Change the checkpoint file to run different experiments
     model_weights = ckpt['model_state_dict']
     model.load_state_dict(model_weights)
 
-    ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/efficientnet_head_binary_contrastive_gram.pth",
-        map_location=device)
+    # Loading checkpoint Head
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnet_head_binary_contrastive_gram.pth", map_location=device) # Change the checkpoint file to run different experiments
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
 

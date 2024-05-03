@@ -153,9 +153,6 @@ def main():
     print("\n############## MODEL SETTINGS ##############")
     print(model_setting)
     print()
-    print("\n############## TRAIN SETTINGS ##############")
-    print(train_setting)
-    print()
 
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])
     train_size = int(0.8 * len(dataset)) # 80% training set
