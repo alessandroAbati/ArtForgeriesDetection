@@ -32,12 +32,14 @@ To replicate the environment and run the code follow these steps:
 1. Multiclass fine-tuning
 
     - Dataset
+
         The dataset for the first multiclass fine-tuning of the models had been created by refining the Hugging-Face WikiArt dataset (https://huggingface.co/datasets/huggan/wikiart). The dataset we used is available here:
         https://drive.google.com/drive/folders/15nQBkj3PtQIqIG5EB2ECS66KMATazQRY?usp=sharing
 
         Please place the 'wikiart_data_batches' directory in the main 'ArtForgeriesDetection' folder. If you wish to change the path of the dataset directory, change the config.yaml file accordingly.
 
     - Adjust the settings in the 'config.yaml' file. 
+
         For example, to train 'EfficinetNet' model without attention the config file should look like this:
         ```yaml
         data_settings:
@@ -63,7 +65,8 @@ To replicate the environment and run the code follow these steps:
 
 2. Binary Classification
 
-    - Adjust the settings in the 'config.yaml' file. 
+    - Adjust the settings in the 'config.yaml' file.
+
         For example, to train 'EfficinetNet' model without attention the config file should look like this:
         ```yaml
         data_settings:
@@ -84,6 +87,7 @@ To replicate the environment and run the code follow these steps:
         * Note: if you want to run the binary classification in contrastive mode, change 'data_settings[contrastive]' to True
 
     - Train
+        
         To start the training run the 'train.py' file:
         ```bash
         python3 train.py
@@ -91,7 +95,16 @@ To replicate the environment and run the code follow these steps:
 
 3. Visualisation of Latent Space Representation
 
-    - Change the checkpoint to be loaded in the 'style.py' file:
-        
+    - Change the checkpoint file name to be loaded in the 'style.py' file at line 70 for the encoder and at line 75 for the head:
+
+        The checkpoint files for the encoder has the format: '<model_name>_<binary/multiclass>_', while the checkpoint files for the head has the format: '<model_name>_head_<binary/multiclass>_'
+        * Note: the checkpoints between the encoder and the head MUST be consistent.
+
+    - Visualise the plots:
+
+        Run:
+        ```bash
+        python3 style.py
+        ```
 
 4. Inference and Visualisation of Attention
