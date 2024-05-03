@@ -111,7 +111,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     elif model_settings['model_type'] == 'efficientnetAttention':
         model = EfficientNetModelAttention().to(device)
         print("EfficientNet with Attention loaded")
-        attention = False
+        attention = True
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention'")
 
