@@ -60,59 +60,29 @@ def extract_features(data_settings, model_settings, train_settings):
         raise ValueError("The style plot is not supported for 'resnet' model, please change the settings in the config file")
     elif model_settings['model_type'] == 'efficientnet':
         model = EfficientNetModel().to(device)
-        model_comp = EfficientNetModel().to(device)
         model_head = Head(encoder_model=model, num_classes=model_settings['num_classes']).to(device)
-        model_head_comp = Head(encoder_model=model_comp, num_classes=model_settings['num_classes']).to(device)
 
         print("Model loaded")
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet'")
 
     # Loading checkpoint
-    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth", map_location=device)
+    ckpt = torch.load( f"{model_settings['checkpoint_folder']}/efficientnet_binary_contrastive_gram.pth", map_location=device)
     model_weights = ckpt['model_state_dict']
     model.load_state_dict(model_weights)
 
     ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth",
-        map_location=device)
-    model_weights = ckpt['model_state_dict']
-    model_comp.load_state_dict(model_weights)
-
-    ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth",
+        f"{model_settings['checkpoint_folder']}/efficientnet_head_binary_contrastive_gram.pth",
         map_location=device)
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
 
-    ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth",
-        map_location=device)
-    model_weights = ckpt['model_state_dict']
-    model_head_comp.load_state_dict(model_weights)
-
-    models_differ = 0
-    for key_item_1, key_item_2 in zip(model.state_dict().items(), model_comp.state_dict().items()):
-        if torch.equal(key_item_1[1], key_item_2[1]):
-            pass
-        else:
-            models_differ += 1
-            if (key_item_1[0] == key_item_2[0]):
-                print('Mismatch found at', key_item_1[0])
-            else:
-                raise Exception
-    if models_differ == 0:
-        print('Models match perfectly! :)')
-
     for param in model.parameters():
         param.requires_grad = False
 
-    # for name, param in model.named_parameters():
-    #     print(name, param)
     print("Model's pretrained weights loaded!")
 
     extracted_features = []
-    extracted_features2 = []
     binary_labels = []
     pred_labels = np.array([])
     labels_list = np.array([])
@@ -132,30 +102,9 @@ def extract_features(data_settings, model_settings, train_settings):
             preds = torch.argmax(output, dim=1).cpu()
             pred_labels = np.concatenate((pred_labels, preds))
 
-    model_comp.eval()
-    model_head_comp.eval()
-    with torch.no_grad():
-        for images, labels, AI_labels in val_loader:
-            images = images.to(device)
-            labels_list = np.concatenate((labels_list, labels))
-            for label in AI_labels:
-                binary_labels.append(label)
-            outputs, _ = model_comp(images)
-            extracted_features2.append(outputs.detach().cpu())
-            output = model_head_comp(outputs)
-            preds = torch.argmax(output, dim=1).cpu()
-            pred_labels = np.concatenate((pred_labels, preds))
-
     # Concatenate all the features
     features_tensor = torch.cat(extracted_features, dim=0)
-    features_tensor2 = torch.cat(extracted_features2, dim=0)
 
-    cosine = torch.nn.CosineSimilarity()
-    print(cosine(features_tensor, features_tensor2))
-    if torch.equal(features_tensor, features_tensor2):
-        print("The tensors are equal")
-    else:
-        print("Difference!")
     features_np = features_tensor.numpy()
     binary_labels = np.array(binary_labels)
 

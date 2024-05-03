@@ -64,9 +64,12 @@ def validate_loop(model, model_head, val_loader, criterion, binary_loss, attenti
             images, labels = images.to(device), labels.to(device)
             if attention:
                 outputs, weights = model(images)
+                prediction_class = torch.argmax()
                 if labels.item() == 1.0:
                     visualize_attention(images, weights)
                     print(outputs)
+                outputs = model_head(outputs)
+
             else:
                 outputs, _ = model(images)
                 outputs = model_head(outputs)
@@ -101,7 +104,7 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     elif model_settings['model_type'] == 'efficientnetAttention':
         model = EfficientNetModelAttention().to(device)
         print("EfficientNet with Attention loaded")
-        attention = False
+        attention = True
     else:
         raise ValueError("Model type in config.yaml should be 'resnet' or 'efficientnet' or 'efficientnetAttention'")
 
@@ -110,17 +113,14 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
 
     # Loading checkpoint
     binary_loss = False
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_binary_contrastive_multihead_4.pth")
     model.load_state_dict(ckpt['model_state_dict'])
 
-    ckpt = torch.load(
-        f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_multi_head_binary={data_settings['binary']}_contrastive={data_settings['contrastive']}.pth")
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_head_binary_contrastive_multihead_4.pth")
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
     # for param in model.parameters():
     #     print(param.data)
-
-    # model.load_state_dict(torch.load(f"{model_settings['checkpoint_folder']}/{model_settings['model_type']}_binary_contrastive_weights.pth"))
 
     print("Model's pretrained weights loaded!")
 

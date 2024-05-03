@@ -171,3 +171,4 @@ cython_debug/
 #/Vincent_Fakes/
 #/checkpoints/
 /checkpoints/
+/checkpoints_backup/
