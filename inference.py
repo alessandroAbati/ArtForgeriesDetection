@@ -27,16 +27,16 @@ def visualize_attention(img, attention_map):
     """
     img = img.squeeze(0)
     attention_map = attention_map.squeeze(0)
-    img = img.permute(1, 2, 0) # [W, H, 3]
+    img = img.permute(1, 2, 0) # [N, N, 3]
     attention_map = attention_map.cpu().detach().numpy()
     print(attention_map.shape)
-    attention_map = np.mean(attention_map, axis=0) # Average over all heads
+    attention_map = np.mean(attention_map, axis=0) # Average over first dimension
     print(attention_map.shape)
 
     # attention_map = np.max(attention_map, axis=0) # Average over all heads
     # attention_map = np.mean(attention_map, axis=0) # Average over all heads
-    attention_map = attention_map.reshape(int(np.sqrt(attention_map.shape[0])), int(np.sqrt(attention_map.shape[0]))) # Reshape to square shape
-    attention_map = (attention_map - np.min(attention_map)) / (np.max(attention_map) - np.min(attention_map))
+    attention_map = attention_map.reshape(int(np.sqrt(attention_map.shape[0])), int(np.sqrt(attention_map.shape[0]))) # Reshape to W * H
+    attention_map = (attention_map - np.min(attention_map)) / (np.max(attention_map) - np.min(attention_map)) # Normalisation
 
     # Resize image to match attention map size
     # img_resized = F.interpolate(img.unsqueeze(0), size=attention_map.shape, mode='bilinear', align_corners=False)
