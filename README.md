@@ -25,7 +25,10 @@ To replicate the environment and run the code follow these steps:
     - Using pip
         ```bash
         pip install -r requirements.txt
-        ```
+      
+    - WandB:
+   
+         To setup WandB logging, you must set the WandB key as an environment variable
 
 ## Usage
 
@@ -60,7 +63,7 @@ To replicate the environment and run the code follow these steps:
     - Train
         To start the training run the 'train.py' file:
         ```bash
-        python3 train.py
+        python train.py
         ```
 
 2. Binary Classification
@@ -90,7 +93,7 @@ To replicate the environment and run the code follow these steps:
 
         To start the training run the 'train.py' file:
         ```bash
-        python3 train.py
+        python train.py
         ```
 
 3. Visualisation of Latent Space Representation
@@ -104,7 +107,7 @@ To replicate the environment and run the code follow these steps:
 
         Run:
         ```bash
-        python3 style.py
+        python style.py
         ```
 
 4. Inference and Visualisation of Attention
@@ -119,9 +122,12 @@ To replicate the environment and run the code follow these steps:
       By default, the attention matrix/weights are visualized. If the outputs of the attention model want to be visualized, change in 'models.py', in line 279, 'attention' variable for 'output'.
       Additionally, the line 114 in 'inference.py' must be set as 'attention=True' if attentions want to be plotted. Otherwise set this variable as False.
 
+    - Single vs Multihead attention:
+   
+      If you want to compare singlhead vs multihead attention results, please swap line 162 for line 161 in 'models.py'.
   - Visualise the results:
 
       Run:
       ```bash
-      python3 style.py
+      python style.py
       ```
