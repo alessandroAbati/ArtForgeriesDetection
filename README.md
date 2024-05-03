@@ -97,7 +97,7 @@ To replicate the environment and run the code follow these steps:
 
     - Change the checkpoint file name to be loaded in the 'style.py' file at line 70 for the encoder and at line 75 for the head:
 
-        The checkpoint files for the encoder has the format: '{<model_name>_<binary/multiclass>_}', while the checkpoint files for the head has the format: '<model_name>_head_<binary/multiclass>_'
+        The checkpoint files for the encoder has the format: '<model_name>\_<binary/multiclass>_', while the checkpoint files for the head has the format: '<model_name>_head_<binary/multiclass>_'
         * Note: the checkpoints between the encoder and the head MUST be consistent.
 
     - Visualise the plots:
