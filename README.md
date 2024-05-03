@@ -122,7 +122,7 @@ To replicate the environment and run the code follow these steps:
       By default, the attention matrix/weights are visualized. If the outputs of the attention model want to be visualized, change in 'models.py', in line 279, 'attention' variable for 'output'.
       Additionally, the line 114 in 'inference.py' must be set as 'attention=True' if attentions want to be plotted. Otherwise set this variable as False.
 
-      - Visualize errors:
+    - Visualize errors:
       
       If you want to visualize the errors made by the code, set the boolean variable 'plot_errors' on line 169 to True.
 
