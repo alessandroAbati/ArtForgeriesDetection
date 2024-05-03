@@ -41,7 +41,7 @@ class WikiArtDataset(Dataset):
     label_to_artist = {i + 1: artist for i, artist in enumerate(artists)}
 
     def __init__(self, data_dir, img_size=(512, 512), transform=None, binary=False, 
-                 contrastive=False, contrastive_batch_size=4, index=None):
+                 contrastive=False, contrastive_batch_size=4, index=None, test=False):
         """
         Args:
             data_dir (string): Directory with wikiart dataset files.
@@ -51,7 +51,9 @@ class WikiArtDataset(Dataset):
             contrastive (bool, optional): Parameter to select contrastive dataset, default is false.
             contrastive_batch_size (int, optional): Batch size for the contrastive learning
             index (list, optional): Index used in train/val split for the contrastive learning
+            test (bool, optional): Parameter to select test dataset, default is false.
         """
+        self.test = test
         self.contrastive = contrastive
         self.contrastive_batch_size = contrastive_batch_size
         self.img_size = img_size
@@ -78,7 +80,33 @@ class WikiArtDataset(Dataset):
 
         parquet_files = glob.glob(os.path.join(data_dir, 'batch*.parquet')) # Get wikiart parquet files
 
-        
+        if test:
+            self.data_frame = pd.DataFrame({'image': [None], 'label': [None], 'AI': [None]})
+            for filename in os.listdir('test/fake'): # Get new data from test/fake folder
+                filepath = os.path.join('test/fake', filename)
+                if os.path.isfile(filepath):
+                    new_row = self.data_frame.iloc[0].copy()
+                    new_row['image'] = {'path': filepath}
+                    new_row['label'] = 1.0
+                    if 'ai' in filename:
+                        new_row['AI'] = True
+                    else:
+                        new_row['AI'] = False
+                    self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True) # Concatenate new data
+
+            for filename in os.listdir('test/real'): # Get new data from Forgery folder ("real" forgeries)
+                filepath = os.path.join('test/real', filename)
+                if os.path.isfile(filepath):
+                    new_row = self.data_frame.iloc[0].copy()
+                    new_row['image'] = {'path': filepath}
+                    new_row['label'] = 0.0
+                    new_row['AI'] = False
+                    self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True)
+            self.data_frame.drop(index=0)
+            self.data_frame.reset_index(drop=True)
+            print(f"Test dataset: {self.data_frame.shape}\n{self.data_frame}")
+            return
+
         if not binary:
             # Read each parquet file and concatenate them into a single DataFrame for multiclass
             self.data_frame = pd.concat(
@@ -242,7 +270,7 @@ if __name__ == "__main__":
         print(f"Label {label}")
         break"""
 
-    # Contarstive learning daatset test
+    """# Contarstive learning daatset test
     dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batches_filtered'), binary=True,
                              contrastive=True)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
@@ -251,4 +279,6 @@ if __name__ == "__main__":
         images = images.squeeze(0)
         labels = torch.stack(labels, dim=0).reshape(len(labels))
         print(f"Images: {images.shape}\nlabels: {labels.shape}\n{labels}")
-        break
+        break"""
+    
+    dataset = WikiArtDataset(data_dir=os.path.join('wikiart_data_batches', 'data_batches_filtered'), test=True)
