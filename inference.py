@@ -111,16 +111,15 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
     # Model classifier head
     model_head = Head(encoder_model=model, num_classes=model_settings['num_classes']).to(device)
 
-    # Loading checkpoint
+    # Loading checkpoint Encoder
     binary_loss = False
     ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_binary_contrastive_multihead_4.pth")
     model.load_state_dict(ckpt['model_state_dict'])
 
+    # Loading checkpoint Head
     ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_head_binary_contrastive_multihead_4.pth")
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
-    # for param in model.parameters():
-    #     print(param.data)
 
     print("Model's pretrained weights loaded!")
 
