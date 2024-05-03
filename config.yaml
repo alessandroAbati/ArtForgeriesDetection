@@ -4,7 +4,7 @@ data_settings:
     contrastive: True
     contrastive_batch_size: 26 # The batch will always be formed by 1 anchor, 3 positives, (batch_size-4) negatives
 model:
-    model_type: 'efficientnetAttention' # resnet or efficientnet or efficientnetAttention
+    model_type: 'efficientnet' # resnet or efficientnet or efficientnetAttention
     num_classes:  2 # If data_settings[binary] is True, number of classes will be always 2
     checkpoint_folder: 'checkpoints'
 train:

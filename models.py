@@ -158,8 +158,8 @@ class EfficientNetModelAttention(nn.Module):
         self.model._fc = nn.Identity()
 
         # Attention layer
-        # self.attention = SelfAttentionCNN(in_dim=1280)
-        self.attention = AttentionMultiHead(input_size=1280, hidden_size=1280, nr_heads=4)
+        self.attention = SelfAttentionCNN(in_dim=1280)
+        # self.attention = AttentionMultiHead(input_size=1280, hidden_size=1280, nr_heads=4)
 
 
         # Avg Pooling layer

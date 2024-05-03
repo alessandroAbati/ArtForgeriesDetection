@@ -61,18 +61,18 @@ def validate_loop(model, model_head, val_loader, criterion, binary_loss, attenti
             if attention:
                 outputs, weights = model(images)
                 outputs = model_head(outputs)
-                if labels.item() == 1.0:
+                if labels.item() == 0.0:
+                    print(f"Prediction with probability: {torch.softmax(outputs, dim=1)}")
                     visualize_attention(images, weights)
-
             else:
                 outputs, _ = model(images)
                 outputs = model_head(outputs)
 
             # Optional code to visualize errors
             if plot_errors:
-                prediction_class = torch.argmax(torch.sigmoid(outputs))
+                prediction_class = torch.argmax(torch.softmax(outputs, dim=1))
                 if prediction_class.item() != labels.item():
-                    print(f"Incorrect Prediction: {counter_errors}")
+                    print(f"Incorrect Prediction with probability: {torch.softmax(outputs, dim=1)}")
                     counter_errors += 1
                     img = images.squeeze(0)
                     img = img.permute(1, 2, 0)  # [N, N, 3]
@@ -120,11 +120,11 @@ def inference(train_dataset, val_dataset, data_settings, model_settings, train_s
 
     # Loading checkpoint Encoder
     binary_loss = False
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_binary_multihead_4.pth")
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_binary_singlehead.pth")
     model.load_state_dict(ckpt['model_state_dict'])
 
     # Loading checkpoint Head
-    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_head_binary_multihead_4.pth")
+    ckpt = torch.load(f"{model_settings['checkpoint_folder']}/efficientnetAttention_head_binary_singlehead.pth")
     model_weights = ckpt['model_state_dict']
     model_head.load_state_dict(model_weights)
 
