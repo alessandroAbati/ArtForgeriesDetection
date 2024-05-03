@@ -61,7 +61,7 @@ def validate_loop(model, model_head, val_loader, criterion, binary_loss, attenti
             if attention:
                 outputs, weights = model(images)
                 outputs = model_head(outputs)
-                if labels.item() == 0.0:
+                if labels.item() == 1.0:
                     print(f"Prediction with probability: {torch.softmax(outputs, dim=1)}")
                     visualize_attention(images, weights)
             else:
@@ -166,7 +166,7 @@ def main():
     dataset = WikiArtDataset(data_dir=data_settings['dataset_path'], binary=data_settings['binary'])
     train_size = int(0.8 * len(dataset))  # 80% training set
     train_dataset, val_dataset = random_split(dataset, [train_size, len(dataset) - train_size])
-    plot_errors = False
+    plot_errors = True
     inference(train_dataset, val_dataset, data_settings, model_setting, train_setting, plot_errors)
 
 
