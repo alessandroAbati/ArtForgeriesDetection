@@ -28,7 +28,7 @@ To replicate the environment and run the code follow these steps (**Warning**: a
       
     - WandB:
    
-         To setup WandB logging, you must set the WandB key as an environment variable
+         To setup WandB logging, you must set the WandB key as an environment variable. An invitattion link to the wandB log (INM705_Final-Results) is provided here: https://wandb.ai/citai?invited=&newUser=false
 
 ## Usage
 
