@@ -173,8 +173,28 @@ class AttentionMultiHead(nn.Module):
         # print(z_out_out.shape)
         return z_out_out, weight_mean
 
+class SelfAttentionCNN(nn.Module):
+    def __init__(self, in_dim):
+        super(SelfAttentionCNN, self).__init__()
+        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
 
-class SelfAttention(nn.Module):
+    def forward(self, x):
+        batch_size, C, width, height = x.size()
+        query = self.query_conv(x).view(batch_size, -1, width * height).permute(0, 2, 1)
+        key = self.key_conv(x).view(batch_size, -1, width * height)
+        energy = torch.bmm(query, key)
+        attention = F.softmax(energy, dim=-1)
+        attention_temp = torch.bmm(attention, attention.permute(0,2,1))
+        value = self.value_conv(x).view(batch_size, -1, width * height)
+        out = torch.bmm(value, attention.permute(0, 2, 1))
+        out_att = out.view(batch_size, C, width, height)
+        out = self.gamma * out_att + x
+        return out, attention_temp
+
+"""class SelfAttention(nn.Module):
 
     def __init__(self, input_size, out_size):
         super(SelfAttention, self).__init__()
@@ -201,29 +221,7 @@ class SelfAttention(nn.Module):
         softmax_q_k = self.softmax(out_q_k)
         out_combine = torch.bmm(softmax_q_k, value_out)
         return out_combine
-
-
-class SelfAttentionCNN(nn.Module):
-    def __init__(self, in_dim):
-        super(SelfAttentionCNN, self).__init__()
-        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
-        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
-        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
-        self.gamma = nn.Parameter(torch.zeros(1))
-
-    def forward(self, x):
-        batch_size, C, width, height = x.size()
-        query = self.query_conv(x).view(batch_size, -1, width * height).permute(0, 2, 1)
-        key = self.key_conv(x).view(batch_size, -1, width * height)
-        energy = torch.bmm(query, key)
-        attention = F.softmax(energy, dim=-1)
-        attention_temp = torch.bmm(attention, attention.permute(0,2,1))
-        value = self.value_conv(x).view(batch_size, -1, width * height)
-        out = torch.bmm(value, attention.permute(0, 2, 1))
-        out_att = out.view(batch_size, C, width, height)
-        out = self.gamma * out_att + x
-        return out, attention_temp
-
+    
 class MultiHeadSelfAttentionCNN(nn.Module):
     def __init__(self, in_dim, num_heads=8):
         super(MultiHeadSelfAttentionCNN, self).__init__()
@@ -244,7 +242,7 @@ class MultiHeadSelfAttentionCNN(nn.Module):
         attention = F.softmax(energy, dim=-1)
         attention_temp = torch.bmm(attention, attention.permute(0, 1, 3, 2))
         value = self.value_conv(x).view(batch_size, -1, width * height)
-        output = torch.matmul(attention.permute(0, 1, 3, 2), value)
-        out_att = output.view(batch_size, C, width, height)
+        out = torch.matmul(attention.permute(0, 1, 3, 2), value)
+        out_att = out.view(batch_size, C, width, height)
         out = self.gamma * out_att + x
-        return out, attention
+        return out, attention"""
