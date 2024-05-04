@@ -128,7 +128,7 @@ To replicate the environment and run the code follow these steps (**Warning**: a
 
     - Visualize errors:
       
-      If you want to visualize the errors made by the code, set the boolean variable 'plot_errors' on line 169 to True.
+      If you want to visualize the errors made by the code, set the boolean variable 'plot_errors' on line 167 in 'inference.py' to True.
 
     - Single vs Multihead attention:
    
