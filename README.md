@@ -18,7 +18,7 @@ To replicate the environment and run the code follow these steps (**Warning**: a
     - Using conda
         ```bash
         conda env create -f environment.yml
-        conda activate <environment_name>
+        conda activate ArtForgeriesDetection
         ```
         * Note: the default environemnt name will be 'ArtForgeriesDetection'; if you wish to modify the name, change the first line fo the environment.yml file before running.
 
@@ -138,5 +138,5 @@ To replicate the environment and run the code follow these steps (**Warning**: a
 
       Run:
       ```bash
-      python style.py
+      python inference.py
       ```
