@@ -117,6 +117,10 @@ To replicate the environment and run the code follow these steps (**Warning**: a
         The checkpoint files for the encoder has the format: '<model_name>\_<binary/multiclass>\_', while the checkpoint files for the head has the format: '<model_name>\_head\_<binary/multiclass>\_'
         * Note: the checkpoints between the encoder and the head MUST be consistent.
 
+    - Test/Validation inference:
+
+        By default the test set will be run. If you wish to run the validation set, change the boolean <test> to <False> at line 166 in the 'inference.py' file.
+
     - Visualisation of attention settings:
       
       By default, the attention matrix/weights are visualized. If the outputs of the attention model want to be visualized, change in 'models.py', in line 279, 'attention' variable for 'output'.
@@ -128,7 +132,8 @@ To replicate the environment and run the code follow these steps (**Warning**: a
 
     - Single vs Multihead attention:
    
-      If you want to compare singlhead vs multihead attention results, please swap line 162 for line 161 in 'models.py'.
+      If you want to compare single-head vs multi-head attention results, please swap line 162 for line 161 in 'models.py'.
+
   - Visualise the results:
 
       Run:
