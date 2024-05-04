@@ -104,7 +104,7 @@ class WikiArtDataset(Dataset):
                     self.data_frame = pd.concat([self.data_frame, pd.DataFrame([new_row])], ignore_index=True)
             self.data_frame.drop(index=0, inplace=True)
             self.data_frame.reset_index(drop=True)
-            print(f"Test dataset: {self.data_frame.shape}\n{self.data_frame}")
+            print(f"Test dataset: {self.data_frame.shape}")
             return
 
         if not binary:
