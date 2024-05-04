@@ -5,35 +5,6 @@ from efficientnet_pytorch import EfficientNet
 import torch.nn.functional as F
 import math
 
-"""class ResNetModel(nn.Module):
-    def __init__(self, num_classes, resnet_version='resnet18', binary_classification=False):
-        super(ResNetModel, self).__init__()
-        self.binary_classification = binary_classification
-
-        self.model = getattr(models, resnet_version)()  # Load a pretrained ResNet model
-
-        self.load_checkpoint('pretrain_weights/resnet_pretrain.pth')  # Load checkpoint file (workaround for hyperion proxy problem)
-
-        # Freeze layers
-        for p in self.model.parameters():
-            p.requires_grad = False
-        for c in list(self.model.children())[5:]:
-            for p in c.parameters():
-                p.requires_grad = True
-
-        num_features = self.model.fc.in_features
-        self.model.fc = nn.Linear(num_features, num_classes)  # Replace the classifier layer
-
-    def forward(self, x):
-        if self.binary_classification:
-            return torch.sigmoid(self.model(x))
-        else:
-            return self.model(x)
-
-    def load_checkpoint(self, checkpoint_path):
-        weights = torch.load(checkpoint_path)
-        self.model.load_state_dict(weights)"""
-
 class ResNetModel(nn.Module):
     def __init__(self):
         super(ResNetModel, self).__init__()

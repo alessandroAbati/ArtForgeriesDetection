@@ -300,6 +300,7 @@ def train_loop(model, model_head, train_loader, criterion, optimizer, optimizer_
         labels = labels.type(torch.LongTensor).to(device)
         if binary_loss:
             loss = criterion(outputs[:, 1], labels.float())
+            # For weighted BCE:
             # one_hot_labels = F.one_hot(labels, num_classes=2).to(device)
             # original_tensor = torch.FloatTensor([1.0, 5.0]).to(device)
             # batch_tensor = original_tensor.repeat(one_hot_labels.size(0), 1).to(device)
